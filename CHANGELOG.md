@@ -26,6 +26,16 @@
 
 ---
 
+## [0.0.10-beta] - 2026-03-15
+
+### 修复
+
+- 修复 OpenClaw 升级时 fake git 不生效（git.cmd 路径含双反斜杠导致 ENOENT），同时补全对 optionalDependencies 中 git URL 依赖的 stub 替换
+- 修复应用更新进度条卡在 0%（available 状态误提前 unsubscribe，下载事件收不到）
+- 修复应用更新下载时顶部 toast 与设置页进度条重复显示
+
+---
+
 ## [0.0.9-beta] - 2026-03-15
 
 ### 修复
