@@ -16,6 +16,47 @@ const UNUSED_LARGE_PKGS = [
   'playwright-core', '@playwright', 'typescript', '@cloudflare',
 ]
 
+// ── Fake git 脚本（Node.js CJS，不依赖系统 git）──────────────────────────────
+// npm 在安装 git URL 依赖时会调用 git ls-remote / git clone。
+// 我们注入一个假的 git 可执行文件拦截这些调用：
+//   ls-remote → 返回假的哈希，让 npm 认为引用是 commit hash
+//   clone     → 在目标目录创建最小的空包，让 npm 认为克隆成功
+//   其他命令  → 直接 exit 0
+const FAKE_GIT_JS = `#!/usr/bin/env node
+'use strict';
+const args = process.argv.slice(2);
+const cmd = args[0];
+
+if (cmd === 'ls-remote') {
+  // npm 调用: git ls-remote <url> <ref>
+  // 返回一个假的哈希，让 npm 把它当作 commit hash 缓存
+  process.stdout.write('0000000000000000000000000000000000000000\\tHEAD\\n');
+  process.exit(0);
+}
+
+if (cmd === 'clone') {
+  // npm 调用: git clone <url> <dest> [--depth 1 ...]
+  // 在目标目录放一个最小的 package.json + index.js，让 npm 认为克隆成功
+  const fs = require('fs');
+  const path = require('path');
+  // args: clone [--depth 1] [--no-local] ... <url> <dest>
+  // 找到最后一个非 flag 参数作为目标目录
+  const dest = args.filter(a => !a.startsWith('-')).pop();
+  if (dest) {
+    try {
+      fs.mkdirSync(dest, { recursive: true });
+      const pkg = { name: 'stub', version: '0.0.1', main: 'index.js' };
+      fs.writeFileSync(path.join(dest, 'package.json'), JSON.stringify(pkg));
+      fs.writeFileSync(path.join(dest, 'index.js'), 'module.exports = {};\\n');
+    } catch (_) {}
+  }
+  process.exit(0);
+}
+
+// 其他 git 子命令（fetch、rev-parse 等）直接成功退出
+process.exit(0);
+`
+
 // 与 bundle-openclaw.mjs 保持同步的包装脚本内容
 const EASIEST_CLAW_GATEWAY_SCRIPT = `/**
  * easiest-claw-gateway.mjs — EasiestClaw 包装入口
@@ -191,14 +232,48 @@ async function patchGitDeps(pkgDir: string, stubsDir: string, send: ProgressSend
   } catch { /* 修改失败不中断，让 npm install 继续尝试 */ }
 }
 
-/** 在指定目录内运行 npm install --production --ignore-scripts */
-function runNpmInDir(dir: string, registry: string, send: ProgressSender): Promise<boolean> {
+/** 在 tmpDir 下创建假的 git 可执行文件，返回包含它的目录路径 */
+async function createFakeGit(tmpDir: string): Promise<string> {
+  const nodeExe = app.isPackaged
+    ? (process.platform === 'win32'
+      ? join(process.resourcesPath, 'node', 'node.exe')
+      : join(process.resourcesPath, 'node', 'node'))
+    : (process.platform === 'win32'
+      ? join(app.getAppPath(), 'resources', 'node', 'node.exe')
+      : join(app.getAppPath(), 'resources', 'node', 'node'))
+
+  const fakeGitDir = join(tmpDir, '_fake-git')
+  await fs.promises.mkdir(fakeGitDir, { recursive: true })
+
+  // 写入 Node.js 脚本
+  const scriptPath = join(fakeGitDir, 'fake-git.js')
+  await fs.promises.writeFile(scriptPath, FAKE_GIT_JS)
+
+  if (process.platform === 'win32') {
+    // Windows：写 git.cmd，通过 @<node> 调用脚本
+    const nodeExeForward = nodeExe.replace(/\\/g, '\\\\')
+    const scriptPathForward = scriptPath.replace(/\\/g, '\\\\')
+    const cmd = `@"${nodeExeForward}" "${scriptPathForward}" %*\r\n`
+    await fs.promises.writeFile(join(fakeGitDir, 'git.cmd'), cmd)
+  } else {
+    // macOS / Linux：写 git shell script
+    const sh = `#!/bin/sh\nexec "${nodeExe}" "${scriptPath}" "$@"\n`
+    const gitPath = join(fakeGitDir, 'git')
+    await fs.promises.writeFile(gitPath, sh)
+    await fs.promises.chmod(gitPath, 0o755)
+  }
+
+  return fakeGitDir
+}
+
+/** 在指定目录内运行 npm install --production（fakeGitDir 注入 PATH 前缀）*/
+function runNpmInDir(dir: string, registry: string, fakeGitDir: string, send: ProgressSender): Promise<boolean> {
   const nodeDir = app.isPackaged
     ? join(process.resourcesPath, 'node')
     : join(app.getAppPath(), 'resources', 'node')
 
   const installArgs = ['install', '--production', '--registry', registry,
-    '--no-audit', '--no-fund', '--ignore-scripts', '--no-optional']
+    '--no-audit', '--no-fund']
 
   let cmd: string, args: string[], shell: boolean
   if (process.platform === 'win32') {
@@ -212,8 +287,15 @@ function runNpmInDir(dir: string, registry: string, send: ProgressSender): Promi
     shell = false
   }
 
+  // 将 fakeGitDir 注入 PATH 前缀，让 npm 的 git 调用全部命中我们的假脚本
+  const pathSep = process.platform === 'win32' ? ';' : ':'
+  const envPath = `${fakeGitDir}${pathSep}${process.env.PATH ?? ''}`
+
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd: dir, shell, windowsHide: true })
+    const child = spawn(cmd, args, {
+      cwd: dir, shell, windowsHide: true,
+      env: { ...process.env, PATH: envPath },
+    })
     const handleOut = (data: Buffer) => {
       for (const line of data.toString().split('\n')) {
         if (line.trim()) send('download', 'running', line.trim())
@@ -271,14 +353,15 @@ async function downloadAndInstall(
     return null
   }
 
-  // 4. 将 package.json 中的 git URL 依赖替换为本地空 stub
+  // 4. 将 package.json 中的 git URL 依赖替换为本地空 stub（快速路径）
   const stubsDir = join(tmpDir, '_stubs')
   await fs.promises.mkdir(stubsDir, { recursive: true })
   await patchGitDeps(pkgDir, stubsDir, send)
 
-  // 5. 在解压目录中安装依赖（此时已无 git URL，不需要 git）
+  // 5. 创建假 git 并在解压目录中安装依赖
   send('download', 'running', '正在安装依赖...')
-  if (!await runNpmInDir(pkgDir, registry, send)) {
+  const fakeGitDir = await createFakeGit(tmpDir)
+  if (!await runNpmInDir(pkgDir, registry, fakeGitDir, send)) {
     send('download', 'running', 'npm install 失败')
     return null
   }
