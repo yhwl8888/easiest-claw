@@ -2,9 +2,9 @@ name: Build macOS
 
 on:
   workflow_dispatch:
-  # push:
-  #   tags:
-  #     - 'v*'
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   build-mac:
@@ -14,8 +14,6 @@ jobs:
         include:
           - os: macos-14   # Apple Silicon (arm64) — 免费
             arch: arm64
-          - os: macos-13   # Intel x64
-            arch: x64
 
     runs-on: ${{ matrix.os }}
 
