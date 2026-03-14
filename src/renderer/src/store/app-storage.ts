@@ -1,4 +1,4 @@
-import type { Conversation, Message } from "@/types"
+import type { Conversation, Message, ChatAttachment } from "@/types"
 
 // --- Agent Display Names ---
 
@@ -130,5 +130,54 @@ export const savePinnedToStorage = (conversations: Conversation[]) => {
     localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinned))
   } catch {
     // localStorage unavailable
+  }
+}
+
+// --- DM Image Attachment Cache ---
+// OpenClaw 的 chat.history 对单条消息有 128KB 上限，带图片的消息超限后会被替换为占位文本。
+// 发消息时将图片附件缓存到 localStorage，加载历史时用于恢复。
+
+const DM_ATT_CACHE_PREFIX = "mossb-dm-att:"
+const DM_ATT_CACHE_MAX_ENTRIES = 50
+// 单条缓存条目超过 800KB 则跳过（防止 localStorage 配额耗尽）
+const DM_ATT_CACHE_MAX_ENTRY_BYTES = 800 * 1024
+
+interface AttCacheEntry {
+  text: string
+  attachments: ChatAttachment[]
+}
+
+export const saveAttachmentCache = (convId: string, text: string, attachments: ChatAttachment[]): void => {
+  try {
+    const key = `${DM_ATT_CACHE_PREFIX}${convId}`
+    const raw = localStorage.getItem(key)
+    const existing: AttCacheEntry[] = raw ? (JSON.parse(raw) as AttCacheEntry[]) : []
+    const entry: AttCacheEntry = { text, attachments }
+    if (JSON.stringify(entry).length > DM_ATT_CACHE_MAX_ENTRY_BYTES) return
+    existing.push(entry)
+    const trimmed = existing.length > DM_ATT_CACHE_MAX_ENTRIES
+      ? existing.slice(-DM_ATT_CACHE_MAX_ENTRIES)
+      : existing
+    localStorage.setItem(key, JSON.stringify(trimmed))
+  } catch {
+    // localStorage 不可用或配额超限，静默跳过
+  }
+}
+
+/** 按文本内容匹配并弹出第一条缓存，找不到则返回空数组 */
+export const popAttachmentCache = (convId: string, text: string): ChatAttachment[] => {
+  try {
+    const key = `${DM_ATT_CACHE_PREFIX}${convId}`
+    const raw = localStorage.getItem(key)
+    if (!raw) return []
+    const entries = JSON.parse(raw) as AttCacheEntry[]
+    const idx = entries.findIndex((e) => e.text === text)
+    if (idx === -1) return []
+    const found = entries[idx]
+    const updated = [...entries.slice(0, idx), ...entries.slice(idx + 1)]
+    localStorage.setItem(key, JSON.stringify(updated))
+    return found.attachments
+  } catch {
+    return []
   }
 }

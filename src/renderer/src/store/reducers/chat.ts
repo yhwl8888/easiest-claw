@@ -1,12 +1,19 @@
 import type { Message } from "@/types"
 import type { AppState, AppAction } from "../app-types"
 import { extractTextContent, extractImageAttachments, uniqueId } from "../app-utils"
+import { saveAttachmentCache, popAttachmentCache } from "../app-storage"
 import { handleGatewayEvent } from "./gateway-event"
 
 export function handleChatAction(state: AppState, action: AppAction): AppState | null {
   switch (action.type) {
     case "SEND_MESSAGE": {
       const { conversationId, content, attachments } = action.payload
+      // OpenClaw 的 chat.history 有 128KB 单消息上限，会剥离大图片
+      // 发消息时将图片附件缓存到 localStorage，待历史加载时恢复
+      const imageAtts = (attachments ?? []).filter((a) => !!a.dataUrl)
+      if (imageAtts.length > 0) {
+        saveAttachmentCache(conversationId, content, imageAtts)
+      }
       const newMsg: Message = {
         id: uniqueId("msg"),
         conversationId,
@@ -89,7 +96,12 @@ export function handleChatAction(state: AppState, action: AppAction): AppState |
         .map((m) => {
           const isUser = m.role === "user"
           const content = extractTextContent(m.content)
-          const attachments = isUser ? extractImageAttachments(m.content) : []
+          // 先尝试从 OpenClaw 历史消息中提取图片（小图片可能原样返回）
+          // 若提取为空，则从 localStorage 缓存中恢复（OpenClaw 超限剥离的情况）
+          const extractedAtts = isUser ? extractImageAttachments(m.content) : []
+          const attachments = extractedAtts.length > 0
+            ? extractedAtts
+            : (isUser ? popAttachmentCache(conversationId, content) : [])
           const ts = m.timestamp
             ? new Date(m.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
             : ""
