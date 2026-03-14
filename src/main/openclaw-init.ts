@@ -10,7 +10,7 @@ import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { Worker } from 'worker_threads'
 import { createRequire } from 'module'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { isRecord, readOpenclawConfig, writeOpenclawConfig } from './lib/openclaw-config'
 import { logger } from './lib/logger'
@@ -75,8 +75,11 @@ const total = entries.length
 /**
  * 检查 resourcesPath/openclaw-*.zip 是否需要解压：
  * - dev 模式 / zip 不存在 → 跳过
- * - openclaw/.version 与当前 app 版本一致 → 跳过（已解压）
+ * - userData/.openclaw-version 与 zip 携带版本一致 → 跳过（已解压）
  * - 否则用 worker_threads 并行解压全部 zip，并通过 IPC 推送聚合进度
+ *
+ * 版本标记保存在 userData 而非 resources/openclaw/ 内，
+ * 确保用户直接安装新版本（NSIS 覆盖安装目录）后不会触发重复解压。
  */
 export async function extractOpenClawIfNeeded(
   mainWindow: BrowserWindow | null,
@@ -93,7 +96,9 @@ export async function extractOpenClawIfNeeded(
   }
 
   const destDir = join(resourcesPath, 'openclaw')
-  const markerPath = join(destDir, '.version')
+  // 版本标记存在 userData（%AppData%/EasiestClaw/），与安装目录分离。
+  // 安装新版本时 NSIS 只覆盖安装目录，userData 保持不变，不会误触重新解压。
+  const markerPath = join(app.getPath('userData'), '.openclaw-version')
 
   // 读取本次安装包携带的 openclaw 版本（由 bundle-openclaw.mjs 写入）
   // 用 openclaw 版本而非 app.getVersion()，避免更新 Shell 时触发不必要的重新解压
@@ -201,8 +206,7 @@ export async function extractOpenClawIfNeeded(
 
   await Promise.all(workerPromises)
 
-  // 写入版本标志，下次启动跳过解压
-  mkdirSync(destDir, { recursive: true })
+  // 写入版本标志到 userData（与安装目录分离，更新安装不会删掉它）
   writeFileSync(markerPath, currentVersion)
   sendProgress(100, '')
   logger.info(`[Extract] 解压完成，已写入版本标志 ${currentVersion}`)
