@@ -58,7 +58,7 @@ function DateSeparator({ label }: { label: string }) {
 }
 
 export function ChatWindow() {
-  const { state, dispatch, sendMessage, resetSession } = useApp()
+  const { state, dispatch, sendMessage, resetSession, abortConversation } = useApp()
   const { t } = useI18n()
   useAvatarVersion() // re-render when avatar changes
   const [showMembers, setShowMembers] = useState(false)
@@ -66,6 +66,59 @@ export function ChatWindow() {
   const [personaPanelOpen, setPersonaPanelOpen] = useState(false)
   const [personaAgentId, setPersonaAgentId] = useState("")
   const [personaAgentName, setPersonaAgentName] = useState("")
+
+  // ── 输入区高度拖拽 ──────────────────────────────────────────────────────────
+  const MIN_INPUT_HEIGHT = 88
+  const DEFAULT_INPUT_HEIGHT = 140
+  const [panelHeight, setPanelHeight] = useState(DEFAULT_INPUT_HEIGHT)
+  // 用 ref 跟踪最新值，避免 useCallback([], ...) 的陈旧闭包问题
+  const panelHeightRef = useRef(DEFAULT_INPUT_HEIGHT)
+  panelHeightRef.current = panelHeight
+  // 拖拽内部状态：同时存 rAF id 和拖拽中的实时高度
+  const dragStateRef = useRef<{
+    startY: number
+    startHeight: number
+    liveHeight: number
+    rafId: number | null
+  } | null>(null)
+  // 整个聊天列区域的 ref，用于计算最大高度（容器的 1/3）
+  const columnRef = useRef<HTMLDivElement>(null)
+
+  const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startHeight = panelHeightRef.current  // 始终是当前真实高度
+    const maxH = columnRef.current
+      ? Math.floor(columnRef.current.offsetHeight / 3)
+      : 400
+    dragStateRef.current = { startY: e.clientY, startHeight, liveHeight: startHeight, rafId: null }
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const ds = dragStateRef.current
+      if (!ds) return
+      const delta = ds.startY - ev.clientY
+      ds.liveHeight = Math.min(maxH, Math.max(MIN_INPUT_HEIGHT, ds.startHeight + delta))
+      // 用 rAF 合并高频 mousemove，避免每帧多次 setState
+      if (ds.rafId !== null) return
+      ds.rafId = requestAnimationFrame(() => {
+        if (!dragStateRef.current) return
+        dragStateRef.current.rafId = null
+        setPanelHeight(dragStateRef.current.liveHeight)
+      })
+    }
+    const onMouseUp = () => {
+      const ds = dragStateRef.current
+      if (ds) {
+        if (ds.rafId !== null) cancelAnimationFrame(ds.rafId)
+        setPanelHeight(ds.liveHeight)
+      }
+      dragStateRef.current = null
+      document.removeEventListener("mousemove", onMouseMove)
+      document.removeEventListener("mouseup", onMouseUp)
+    }
+    document.addEventListener("mousemove", onMouseMove)
+    document.addEventListener("mouseup", onMouseUp)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleAgentAvatarClick = useCallback((agentId: string, agentName: string) => {
     setPersonaAgentId(agentId)
@@ -88,6 +141,14 @@ export function ChatWindow() {
     messagesEndRef.current?.scrollIntoView({ behavior: "auto" })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollKey])
+
+  // 输入区高度变化时保持滚动到底部（viewport 变小后 scrollTop 会停在旧位置）
+  const isMountedRef = useRef(false)
+  useEffect(() => {
+    if (!isMountedRef.current) { isMountedRef.current = true; return }
+    messagesEndRef.current?.scrollIntoView({ behavior: "instant" })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelHeight])
 
   if (!conversation) {
     const isConnecting = state.connectionStatus === 'connecting'
@@ -161,14 +222,19 @@ export function ChatWindow() {
 
   return (
     <div className="flex-1 flex h-full overflow-hidden">
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* CSS Grid 列：header=auto, 消息区=minmax(0,1fr), 拖拽=4px, 输入=panelHeight */}
+      <div
+        ref={columnRef}
+        className="flex-1 min-w-0 grid overflow-hidden"
+        style={{ gridTemplateRows: `auto minmax(0, 1fr) 4px ${panelHeight}px` }}
+      >
         <ChatHeader
           conversation={conversation}
           onToggleMembers={isGroup ? () => setShowMembers((p) => !p) : undefined}
           onAgentAvatarClick={handleAgentAvatarClick}
         />
 
-        <ScrollArea className="flex-1 overflow-hidden px-4 py-2">
+        <ScrollArea className="overflow-hidden px-4 py-2">
           <div className="space-y-0.5">
             {items.map((item) =>
               item.type === "date" ? (
@@ -199,6 +265,12 @@ export function ChatWindow() {
           <div ref={messagesEndRef} />
         </ScrollArea>
 
+        {/* 拖拽手柄 — 不可见，悬停时只改变光标 */}
+        <div
+          className="cursor-ns-resize select-none"
+          onMouseDown={handleDragMouseDown}
+        />
+
         <MessageInput
           onSend={(content, attachments) => {
             if (state.activeConversationId) {
@@ -210,8 +282,15 @@ export function ChatWindow() {
               resetSession(state.activeConversationId)
             }
           }}
+          onAbort={() => {
+            if (state.activeConversationId) {
+              abortConversation(state.activeConversationId)
+            }
+          }}
+          isGenerating={thinkingAgents.length > 0}
           showMention={isGroup}
           members={members}
+          panelHeight={panelHeight}
         />
       </div>
 

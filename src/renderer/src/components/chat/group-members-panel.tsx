@@ -161,7 +161,7 @@ export function GroupMembersPanel({ conversation, open, onOpenChange }: GroupMem
 function AddMemberDialog({
   open,
   onOpenChange,
-  conversation,
+  conversation: _conversation,
   currentMemberIds,
   onAdd,
 }: {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ChatAttachment } from '@/types/index'
+import type { ChatAttachment } from '@/types'
 import type { IpcApi } from '../../../preload'
 
 // Access the IPC bridge exposed by preload

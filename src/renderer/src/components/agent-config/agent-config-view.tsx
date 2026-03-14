@@ -2,7 +2,6 @@ import { useEffect, useState } from "react"
 import {
   AlertCircle,
   Bot,
-  CheckCircle2,
   Clock,
   Copy,
   Info,

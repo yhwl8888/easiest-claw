@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from "react"
+
+// 剥离 ANSI 颜色/控制转义码，避免日志乱码
+const ANSI_RE = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g
+function stripAnsi(str: string): string {
+  return str.replace(ANSI_RE, "")
+}
 import { Loader2, Wifi, Minus, X } from "lucide-react"
 import { Camera } from "lucide-react"
 import { toast } from "sonner"
@@ -75,7 +81,7 @@ function GatewayLoadingStep() {
       setExtractPercent(percent)
       if (file) {
         setExtractLog(prev => {
-          const next = [...prev, file]
+          const next = [...prev, stripAnsi(file)]
           return next.length > 200 ? next.slice(-200) : next
         })
       }
@@ -83,7 +89,7 @@ function GatewayLoadingStep() {
     // gateway 启动日志
     const unsubGwLog = window.ipc.onGatewayLog(({ line }) => {
       setGatewayLog(prev => {
-        const next = [...prev, line]
+        const next = [...prev, stripAnsi(line)]
         return next.length > 200 ? next.slice(-200) : next
       })
     })

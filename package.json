@@ -105,7 +105,8 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "resources/icon.ico"
+      "icon": "resources/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {
       "installerIcon": "resources/icon.ico",
@@ -118,11 +119,13 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "resources/icon.icns"
+      "icon": "resources/icon.icns",
+      "artifactName": "${productName}-${version}.${ext}"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "resources/icon.png"
+      "icon": "resources/icon.png",
+      "artifactName": "${productName}-${version}.${ext}"
     },
     "publish": {
       "provider": "github",

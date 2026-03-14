@@ -1,8 +1,7 @@
 
 
-import { Pin, Plus, RefreshCw, Search, Trash2 } from "lucide-react"
+import { Pin, Plus, Search, Trash2 } from "lucide-react"
 import { useState } from "react"
-import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,24 +32,11 @@ import type { Conversation } from "@/types"
 interface ConversationListProps {}
 
 export function ConversationList(_props: ConversationListProps) {
-  const { state, dispatch, refreshFleet } = useApp()
+  const { state, dispatch } = useApp()
   const { t } = useI18n()
   const [search, setSearch] = useState("")
-  const [refreshing, setRefreshing] = useState(false)
   const [newConvOpen, setNewConvOpen] = useState(false)
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
-
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    try {
-      await refreshFleet()
-      toast.success(t('conversationList.refreshSuccess'))
-    } catch {
-      toast.error(t('conversationList.refreshFailed'))
-    } finally {
-      setRefreshing(false)
-    }
-  }
   useAvatarVersion() // re-render when avatar changes
 
   const filtered = state.conversations.filter((c) =>

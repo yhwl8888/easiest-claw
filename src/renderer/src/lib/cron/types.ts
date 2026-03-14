@@ -1,4 +1,6 @@
-import type { GatewayClient } from "@/lib/gateway/GatewayClient";
+interface GatewayClient {
+  call<T>(method: string, params?: unknown): Promise<T>
+}
 
 export type CronSchedule =
   | { kind: "at"; at: string }

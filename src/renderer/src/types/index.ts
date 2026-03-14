@@ -20,6 +20,7 @@ export interface Agent {
   name: string
   role: string
   avatar: string
+  emoji?: string
   skills: string[]
   category: string
   status: AgentStatus
@@ -67,6 +68,7 @@ export interface Conversation {
   purpose?: string
   members: string[]
   orchestration?: GroupOrchestration
+  workspacePath?: string
   lastMessage?: string
   lastMessageSender?: string
   lastMessageTime: string
@@ -77,8 +79,10 @@ export interface Conversation {
 
 export interface ChatAttachment {
   id: string
-  dataUrl: string
+  dataUrl?: string
+  filePath?: string
   mimeType: string
+  fileName?: string
 }
 
-export type ViewType = "chat" | "virtual-team" | "cron" | "openclaw"
+export type ViewType = "chat" | "virtual-team" | "cron" | "openclaw" | "skills" | "agent-config"

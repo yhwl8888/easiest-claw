@@ -56,6 +56,6 @@ export function useAppUpdate(): void {
       }
     })
 
-    return unsubscribe
+    return () => { unsubscribe() }
   }, [])
 }

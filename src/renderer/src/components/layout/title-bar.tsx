@@ -11,7 +11,7 @@ export function TitleBar() {
   useEffect(() => {
     if (!isWindows) return
     const unsubscribe = window.ipc.onMaximizedChanged(setIsMaximized)
-    return unsubscribe
+    return () => { unsubscribe() }
   }, [isWindows])
 
   if (!isWindows) return null

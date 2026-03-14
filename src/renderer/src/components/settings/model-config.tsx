@@ -85,7 +85,7 @@ export function ModelConfigPanel() {
       const res = await window.ipc.openclawModelsSet({
         providers: cleanProviders,
         defaults: {
-          primary: defaults.primary,
+          primary: defaults.primary ?? "",
           fallbacks: defaults.fallbacks ?? [],
         },
       })

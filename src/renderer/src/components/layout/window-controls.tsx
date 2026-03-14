@@ -7,7 +7,8 @@ export function WindowControls() {
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {
-    return window.ipc.onMaximizedChanged((v) => setIsMaximized(v))
+    const unsubscribe = window.ipc.onMaximizedChanged((v) => setIsMaximized(v))
+    return () => { unsubscribe() }
   }, [])
 
   if (window.ipc.platform === "darwin") return null

@@ -19,6 +19,7 @@ import {
   useChatHistory,
   useSendMessage,
   type GatewayEvent,
+  type ConnectionStatus,
 } from "@/hooks/use-openclaw"
 import type { AppContextValue } from "./app-types"
 import { initialState } from "./app-types"
@@ -368,9 +369,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [send]
   )
 
+  const abortConversation = useCallback(
+    (conversationId: string) => {
+      const conv = stateRef.current.conversations.find((c) => c.id === conversationId)
+      if (!conv) return
+
+      const agentMemberIds = conv.members.filter((id) => id !== "user")
+      for (const agentId of agentMemberIds) {
+        if (!stateRef.current.thinkingAgents.has(agentId)) continue
+        const sessionKey =
+          conv.type === "group"
+            ? `agent:${agentId}:group:${conversationId}`
+            : `agent:${agentId}:main`
+        window.ipc.chatAbort({ sessionKey })
+      }
+    },
+    []
+  )
+
   const value = useMemo(
-    () => ({ state, dispatch, sendMessage, simulateAgentReply, refreshFleet, resetSession }),
-    [state, sendMessage, simulateAgentReply, refreshFleet, resetSession]
+    () => ({ state, dispatch, sendMessage, simulateAgentReply, refreshFleet, resetSession, abortConversation }),
+    [state, sendMessage, simulateAgentReply, refreshFleet, resetSession, abortConversation]
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

@@ -2,6 +2,8 @@
 
 # EasiestClaw Desktop
 
+<img src="resources/icon.png" width="96" alt="icon" />
+
 **OpenClaw 的桌面端 GUI — 无需写代码，即可运行你自己的 AI 团队。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)

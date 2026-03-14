@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { ExternalLink, PackageCheck, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 
 type Action = 'connect' | 'stop-and-start'
 

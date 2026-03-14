@@ -59,4 +59,5 @@ export interface AppContextValue {
   simulateAgentReply: (conversationId: string, agentId: string) => void
   refreshFleet: () => Promise<void>
   resetSession: (conversationId: string) => void
+  abortConversation: (conversationId: string) => void
 }
