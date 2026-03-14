@@ -9,6 +9,7 @@ import { spawn } from 'child_process'
 import { patchSettings } from './settings'
 import { sanitizeOpenClawConfig } from '../openclaw-init'
 import { getOpenclawConfigPath } from '../lib/openclaw-config'
+import { logger } from '../lib/logger'
 
 export const GATEWAY_PORT = 18789
 
@@ -170,6 +171,7 @@ export function stopGatewayProcess(): void {
 export function forkOpenclawGateway(entryScript: string, openclawDir: string, token: string, force = false): void {
   if (gatewayProcess && !force) return
   if (gatewayProcess && force) {
+    logger.info('[Gateway] 强制重启：终止旧进程...')
     console.log('[Gateway] 强制重启：终止旧进程...')
     try { gatewayProcess.kill() } catch {}
     gatewayProcess = null
@@ -190,6 +192,7 @@ export function forkOpenclawGateway(entryScript: string, openclawDir: string, to
       serviceName: 'OpenClaw Gateway',
     }
   )
+  logger.info(`[Gateway] fork 完成 — entry: ${entryScript}`)
 
   const handleLine = (line: string, isError: boolean) => {
     console.log(`[Gateway${isError ? ':err' : ''}]`, line)
@@ -203,6 +206,7 @@ export function forkOpenclawGateway(entryScript: string, openclawDir: string, to
   child.stdout?.on('data', (d: Buffer) => splitLines(d, false))
   child.stderr?.on('data', (d: Buffer) => splitLines(d, true))
   child.on('exit', (code) => {
+    logger.warn(`[Gateway] 进程退出 code=${code}`)
     console.log(`[Gateway] process exited (code=${code})`)
     gatewayProcess = null
   })
@@ -242,17 +246,21 @@ export async function restartSystemGateway(): Promise<boolean> {
 export async function autoSpawnBundledOpenclaw(): Promise<void> {
   const bundledOc = getBundledOpenclaw()
   if (!bundledOc) {
+    logger.warn('[AutoSpawn] 内置 openclaw 不存在，跳过')
     console.log('[AutoSpawn] 内置 openclaw 不存在，跳过')
     return
   }
 
   const { openclawDir, entryScript } = bundledOc
+  logger.info(`[AutoSpawn] 内置 openclaw 目录: ${openclawDir}`)
 
   let token = readGatewayToken()
   if (!token) {
+    logger.info('[AutoSpawn] 首次启动，生成 token 并写入配置...')
     console.log('[AutoSpawn] 首次启动，生成 token 并写入配置...')
     token = crypto.randomBytes(24).toString('hex')
     writeGatewayConfig(token)
+    logger.info('[AutoSpawn] 配置写入完成')
     console.log('[AutoSpawn] 配置写入完成')
   } else {
     writeGatewayConfig(token)
@@ -261,26 +269,33 @@ export async function autoSpawnBundledOpenclaw(): Promise<void> {
   sanitizeOpenClawConfig()
   patchSettings({ gateway: { url: `ws://localhost:${GATEWAY_PORT}`, token } })
 
+  logger.info('[AutoSpawn] 检查端口 18789 是否已就绪...')
   const alreadyUp = await waitForGatewayReady(1500)
   if (alreadyUp) {
     if (gatewayProcess !== null) {
+      logger.info('[AutoSpawn] 内置 Gateway 已在运行，跳过 fork')
       console.log('[AutoSpawn] 内置 Gateway 已在运行，跳过 fork')
       gatewaySource = 'bundled'
     } else {
+      logger.warn('[AutoSpawn] 端口 18789 已被外部进程占用，等待用户决策...')
       console.log('[AutoSpawn] 端口 18789 已被外部进程占用，等待用户决策...')
       portConflictPending = true
     }
     return
   }
 
+  logger.info('[AutoSpawn] 正在 fork 内置 OpenClaw Gateway...')
   console.log('[AutoSpawn] 正在 fork 内置 OpenClaw Gateway...')
   forkOpenclawGateway(entryScript, openclawDir, token)
 
+  logger.info('[AutoSpawn] 等待 Gateway 就绪（最长 30s）...')
   const ready = await waitForGatewayReady(30_000)
   if (ready) {
     gatewaySource = 'bundled'
+    logger.info('[AutoSpawn] 内置 Gateway 已就绪')
     console.log('[AutoSpawn] 内置 Gateway 已就绪')
   } else {
+    logger.warn('[AutoSpawn] 内置 Gateway 30s 内未就绪，继续（连接层将自动重试）')
     console.warn('[AutoSpawn] 内置 Gateway 30s 内未就绪，继续（连接层将自动重试）')
   }
 }
@@ -288,6 +303,7 @@ export async function autoSpawnBundledOpenclaw(): Promise<void> {
 export async function restartBundledGateway(): Promise<boolean> {
   const bundledOc = getBundledOpenclaw()
   if (!bundledOc) {
+    logger.warn('[RestartBundled] 找不到内置 openclaw 目录')
     console.warn('[RestartBundled] 找不到内置 openclaw 目录')
     return false
   }
@@ -304,8 +320,10 @@ export async function restartBundledGateway(): Promise<boolean> {
 
   const ready = await waitForGatewayReady(30_000)
   if (ready) {
+    logger.info('[RestartBundled] Gateway 已就绪')
     console.log('[RestartBundled] Gateway 已就绪')
   } else {
+    logger.warn('[RestartBundled] Gateway 30s 内未就绪')
     console.warn('[RestartBundled] Gateway 30s 内未就绪')
   }
   return ready

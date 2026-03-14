@@ -13,6 +13,7 @@ import { createRequire } from 'module'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { isRecord, readOpenclawConfig, writeOpenclawConfig } from './lib/openclaw-config'
+import { logger } from './lib/logger'
 
 // ── 解压状态（IPC 查询用）─────────────────────────────────────────────────────
 export type ExtractPhase = 'idle' | 'extracting' | 'done' | 'skipped'
@@ -64,6 +65,7 @@ export async function extractOpenClawIfNeeded(
 
   // dev 模式或未打包时不存在 zip，直接跳过
   if (zipPaths.length === 0) {
+    logger.info('[Extract] 未找到 zip 文件（dev 模式或首次安装前），跳过解压')
     _extractPhase = 'skipped'
     return
   }
@@ -87,12 +89,14 @@ export async function extractOpenClawIfNeeded(
   if (existsSync(markerPath)) {
     try {
       if (readFileSync(markerPath, 'utf8').trim() === currentVersion) {
+        logger.info(`[Extract] 已解压且版本一致 (${currentVersion})，跳过`)
         _extractPhase = 'skipped'
         return
       }
     } catch { /* 读取失败则重新解压 */ }
   }
 
+  logger.info(`[Extract] 开始解压 openclaw (${zipPaths.length} 个 zip)，目标版本: ${currentVersion}`)
   _extractPhase = 'extracting'
   _extractPercent = 0
 
@@ -135,15 +139,23 @@ export async function extractOpenClawIfNeeded(
             const percent = totalFiles > 0 ? Math.round((totalExtracted / totalFiles) * 100) : 0
             sendProgress(Math.min(percent, 99), msg.file ?? '')
           } else if (msg.type === 'done') {
+            logger.info(`[Extract] Worker 完成: ${zipPath}`)
             resolve()
           } else if (msg.type === 'error') {
+            logger.error(`[Extract] Worker 错误 (${zipPath}): ${msg.message}`)
             reject(new Error(msg.message))
           }
         })
 
-        worker.on('error', reject)
+        worker.on('error', (err) => {
+          logger.error(`[Extract] Worker 异常 (${zipPath}): ${err}`)
+          reject(err)
+        })
         worker.on('exit', (code) => {
-          if (code !== 0) reject(new Error(`Worker exited with code ${code}`))
+          if (code !== 0) {
+            logger.error(`[Extract] Worker 异常退出 code=${code} (${zipPath})`)
+            reject(new Error(`Worker exited with code ${code}`))
+          }
         })
       })
   )
@@ -154,6 +166,7 @@ export async function extractOpenClawIfNeeded(
   mkdirSync(destDir, { recursive: true })
   writeFileSync(markerPath, currentVersion)
   sendProgress(100, '')
+  logger.info(`[Extract] 解压完成，已写入版本标志 ${currentVersion}`)
 }
 
 

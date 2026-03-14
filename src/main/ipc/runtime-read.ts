@@ -1,6 +1,7 @@
 import type { IpcMain } from 'electron'
 import { getRuntime } from '../gateway/runtime'
 import type { ConnectionStatus } from '../gateway/types'
+import { logger } from '../lib/logger'
 
 export const registerRuntimeHandlers = (ipcMain: IpcMain): void => {
   // Get current connection status
@@ -42,4 +43,7 @@ export const registerRuntimeHandlers = (ipcMain: IpcMain): void => {
       return { ok: false, error: err instanceof Error ? err.message : 'Unknown error' }
     }
   })
+
+  // Expose log file path so renderer can display it for debugging
+  ipcMain.handle('logs:getPath', () => logger.getPath())
 }

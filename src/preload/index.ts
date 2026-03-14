@@ -137,6 +137,9 @@ const ipcApi = {
   runtimeStatus: () => ipcRenderer.invoke('runtime:status'),
   runtimeFleet: () => ipcRenderer.invoke('runtime:fleet'),
 
+  // ── Logs ──────────────────────────────────────────────────────────────────
+  logsGetPath: () => ipcRenderer.invoke('logs:getPath'),
+
   // ── Settings ──────────────────────────────────────────────────────────────
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsGetFull: () => ipcRenderer.invoke('settings:get-full'),
