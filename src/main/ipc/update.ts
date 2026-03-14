@@ -210,24 +210,29 @@ async function patchGitDeps(pkgDir: string, stubsDir: string, send: ProgressSend
   const pkgJsonPath = join(pkgDir, 'package.json')
   try {
     const pkgJson = JSON.parse(await fs.promises.readFile(pkgJsonPath, 'utf8')) as Record<string, unknown>
-    const deps = pkgJson.dependencies as Record<string, string> | undefined
-    if (!deps) return
     let modified = false
-    for (const [name, ver] of Object.entries(deps)) {
-      const isGit = typeof ver === 'string' && (
-        ver.startsWith('git+') || ver.startsWith('git://') ||
-        ver.startsWith('github:') || ver.startsWith('bitbucket:') ||
-        /^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]/.test(ver)  // shorthand: "user/repo"
-      )
-      if (!isGit) continue
-      const stubDir = join(stubsDir, name.replace(/\//g, '+'))
-      await fs.promises.mkdir(stubDir, { recursive: true })
-      await fs.promises.writeFile(join(stubDir, 'package.json'), JSON.stringify({ name, version: '0.0.1', main: 'index.js' }))
-      await fs.promises.writeFile(join(stubDir, 'index.js'), 'module.exports = {};\n')
-      deps[name] = `file:${stubDir.replace(/\\/g, '/')}`
-      send('download', 'running', `stub git dep: ${name}`)
-      modified = true
+
+    // 同时处理 dependencies 和 optionalDependencies
+    for (const field of ['dependencies', 'optionalDependencies'] as const) {
+      const deps = pkgJson[field] as Record<string, string> | undefined
+      if (!deps) continue
+      for (const [name, ver] of Object.entries(deps)) {
+        const isGit = typeof ver === 'string' && (
+          ver.startsWith('git+') || ver.startsWith('git://') ||
+          ver.startsWith('github:') || ver.startsWith('bitbucket:') ||
+          /^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]/.test(ver)  // shorthand: "user/repo"
+        )
+        if (!isGit) continue
+        const stubDir = join(stubsDir, name.replace(/\//g, '+'))
+        await fs.promises.mkdir(stubDir, { recursive: true })
+        await fs.promises.writeFile(join(stubDir, 'package.json'), JSON.stringify({ name, version: '0.0.1', main: 'index.js' }))
+        await fs.promises.writeFile(join(stubDir, 'index.js'), 'module.exports = {};\n')
+        deps[name] = `file:${stubDir.replace(/\\/g, '/')}`
+        send('download', 'running', `stub git dep [${field}]: ${name}`)
+        modified = true
+      }
     }
+
     if (modified) await fs.promises.writeFile(pkgJsonPath, JSON.stringify(pkgJson, null, 2))
   } catch { /* 修改失败不中断，让 npm install 继续尝试 */ }
 }
@@ -250,10 +255,8 @@ async function createFakeGit(tmpDir: string): Promise<string> {
   await fs.promises.writeFile(scriptPath, FAKE_GIT_JS)
 
   if (process.platform === 'win32') {
-    // Windows：写 git.cmd，通过 @<node> 调用脚本
-    const nodeExeForward = nodeExe.replace(/\\/g, '\\\\')
-    const scriptPathForward = scriptPath.replace(/\\/g, '\\\\')
-    const cmd = `@"${nodeExeForward}" "${scriptPathForward}" %*\r\n`
+    // Windows：写 git.cmd，路径直接用 join() 的原始反斜杠，不做转义
+    const cmd = `@"${nodeExe}" "${scriptPath}" %*\r\n`
     await fs.promises.writeFile(join(fakeGitDir, 'git.cmd'), cmd)
   } else {
     // macOS / Linux：写 git shell script
