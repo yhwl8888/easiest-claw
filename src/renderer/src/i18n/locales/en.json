@@ -1,0 +1,338 @@
+{
+  "meta": {
+    "title": "EasiestClaw - AI Virtual Company",
+    "description": "A human-friendly OpenClaw shell that lets non-programmers direct an AI team as naturally as chat."
+  },
+  "common": {
+    "cancel": "Cancel",
+    "create": "Create",
+    "creating": "Creating",
+    "save": "Save",
+    "saving": "Saving",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "deleting": "Deleting",
+    "justNow": "Just now",
+    "me": "Me",
+    "meHuman": "Me (Human)",
+    "memberCount": "{{count}} members",
+    "selectedCount": "{{count}} selected",
+    "searchPlaceholder": "Search..."
+  },
+  "nav": {
+    "chat": "Messages",
+    "virtualTeam": "Virtual Team",
+    "cron": "Scheduled Jobs",
+    "openclaw": "OpenClaw",
+    "settings": "Settings",
+    "changeMyAvatar": "Change my avatar",
+    "changeMyAvatarDescription": "After you confirm, a file picker opens and the selected image replaces your current avatar immediately."
+  },
+  "topNav": {
+    "connection": {
+      "connected": "Connected to OpenClaw",
+      "connecting": "Connecting...",
+      "disconnected": "Disconnected",
+      "error": "Connection error"
+    },
+    "comingSoon": "Coming soon"
+  },
+  "settings": {
+    "backToApp": "Back to EasiestClaw",
+    "sections": {
+      "models": "Model Config",
+      "language": "Language",
+      "community": "Community"
+    },
+    "descriptions": {
+      "models": "Add AI providers and configure available models",
+      "language": "Follow the browser language by default, with manual override available",
+      "community": "Join the official WeChat group for updates and support"
+    },
+    "community": {
+      "title": "Official Community",
+      "description": "Scan the QR code below to join the EasiestClaw official WeChat group",
+      "qrTip": "Scan with WeChat to join"
+    },
+    "language": {
+      "current": "Current interface language",
+      "system": "Follow browser",
+      "systemDescription": "Use your browser's preferred language on first visit",
+      "zh": "中文",
+      "en": "English"
+    }
+  },
+  "conversationList": {
+    "title": "Messages",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "dissolveGroup": "Dissolve group",
+    "addNewMember": "Add new member",
+    "createGroup": "Create group",
+    "createGroupComingSoon": "Coming soon. Stay tuned.",
+    "noMessages": "No messages yet",
+    "refreshSuccess": "Refreshed",
+    "refreshFailed": "Refresh failed, please try again"
+  },
+  "newConversation": {
+    "title": "Choose a teammate to start chatting",
+    "searchMembers": "Search teammates...",
+    "recommended": "Recommended",
+    "allMembers": "All members",
+    "skillsPrefix": "Skilled at"
+  },
+  "createAgent": {
+    "gatewayUnavailable": "Gateway unavailable. Please try again later.",
+    "createFailed": "Failed to create the agent. Please try again.",
+    "networkError": "Network error. Please check your connection and try again.",
+    "success": "Agent \"{{name}}\" created successfully",
+    "title": "Create New Agent",
+    "description": "Add a new AI teammate to your virtual company",
+    "nameLabel": "Agent name *",
+    "namePlaceholder": "Enter the agent name",
+    "emojiLabel": "Emoji",
+    "modelLabel": "Model *",
+    "modelPlaceholder": "Select a model",
+    "modelHelper": "Default model pre-selected. You can switch to another.",
+    "modelsLoading": "Loading models…",
+    "noModelsTitle": "No AI models configured",
+    "noModelsDesc": "Add a model provider (e.g. Anthropic, OpenAI) and enter an API key before creating agents.",
+    "goToModelSettings": "Add models in settings"
+  },
+  "groupCreate": {
+    "createdMessage": "Group created",
+    "title": "Create New Group",
+    "nameLabel": "Group name *",
+    "namePlaceholder": "Product Launch Squad",
+    "purposeLabel": "Purpose (optional)",
+    "purposePlaceholder": "Plan and coordinate the Q2 product launch, including market analysis, copywriting, data support, and scheduling",
+    "purposeHelper": "Purpose helps teammates understand the collaboration context",
+    "workspaceLabel": "Shared workspace (optional)",
+    "workspacePlaceholder": "/path/to/your/project",
+    "workspaceHelper": "All members will work in this directory. Leave blank to use each agent's default workspace.",
+    "browsePath": "Browse",
+    "strategyLabel": "Collaboration mode",
+    "maxResponders": "Max responders",
+    "coordinatorLabel": "Choose coordinator",
+    "coordinatorRequired": "Please choose a coordinator",
+    "mainAgent": "Main Coordinator",
+    "coordinator": "Coordinator",
+    "selectMembers": "Choose teammates",
+    "searchMembers": "Search teammates...",
+    "createWithCount": "Create group ({{count}})"
+  },
+  "chatWindow": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "emptyTitle": "Choose a conversation to start chatting",
+    "emptyDescription": "Or click \"New conversation\" to talk with your team",
+    "notConnectedTitle": "Not connected to OpenClaw",
+    "notConnectedDesc": "Connect to start chatting with agents",
+    "goToOpenclaw": "Go to OpenClaw Status",
+    "fullDate": "{{year}}-{{month}}-{{day}}"
+  },
+  "typingIndicator": {
+    "thinking": "{{name}} is thinking..."
+  },
+  "messageBubble": {
+    "taskStatus": {
+      "completed": "Completed",
+      "inProgress": "In progress",
+      "failed": "Failed"
+    },
+    "progress": "Progress",
+    "scope": "Scope: {{scope}}",
+    "viewDetails": "View details",
+    "downloadReport": "Download report",
+    "download": "Download",
+    "preview": "Preview"
+  },
+  "messageInput": {
+    "placeholders": {
+      "withAttachments": "Add a message or keep pasting images...",
+      "default": "Type a message... Enter to send, Shift+Enter for a new line, image paste supported"
+    },
+    "toolbar": {
+      "format": "Format",
+      "mention": "Mention",
+      "shortcut": "Shortcut",
+      "attachment": "Attachment",
+      "more": "More",
+      "newSession": "New session",
+      "expand": "Expand",
+      "send": "Send"
+    },
+    "imageTooLarge": "Image exceeds 10 MB — please compress it first",
+    "dropToAttach": "Drop to attach",
+    "filePathUnavailable": "Cannot read file path — please use the file picker instead"
+  },
+  "header": {
+    "bugFeedback": "Bug Feedback",
+    "status": {
+      "online": "Online",
+      "working": "Working",
+      "busy": "Busy",
+      "thinking": "Thinking"
+    },
+    "tooltips": {
+      "voiceCall": "Voice call",
+      "videoCall": "Video call",
+      "searchMessages": "Search messages",
+      "membersList": "Member list"
+    },
+    "menu": {
+      "viewProfile": "View profile",
+      "rename": "Rename",
+      "changeAvatar": "Change avatar",
+      "pinConversation": "Pin conversation",
+      "muteNotifications": "Mute notifications",
+      "clearHistory": "Clear history",
+      "dissolveGroup": "Dissolve group",
+      "deleteAgent": "Delete agent"
+    },
+    "dissolveGroupConfirm": "Are you sure you want to dissolve \"{{name}}\"? All message history will be cleared.",
+    "dissolveGroupSuccess": "Group \"{{name}}\" has been dissolved",
+    "deleteAgentTitle": "Delete Agent",
+    "deleteAgentDescription": "Are you sure you want to delete \"{{name}}\"? This removes the agent and its workspace data permanently.",
+    "deleteFailed": "Failed to delete the agent. Please try again.",
+    "deleteSuccess": "Agent \"{{name}}\" has been deleted",
+    "unavailableAction": "{{action}} is coming soon.",
+    "networkError": "Network error. Please check your connection and try again.",
+    "renameFailed": "Rename failed",
+    "renameSuccess": "Renamed to \"{{name}}\"",
+    "renameTitle": "Rename Agent",
+    "newName": "New name",
+    "newNamePlaceholder": "Enter a new name",
+    "selectImageFile": "Please choose an image file",
+    "imageSizeLimit": "Image size must be under 2MB",
+    "uploadFailed": "Upload failed",
+    "avatarUpdated": "Avatar updated",
+    "personalAvatarUpdated": "Your avatar has been updated",
+    "changeAvatarTitle": "Change Avatar",
+    "preview": "Preview",
+    "chooseAvatar": "Choose avatar",
+    "refreshBatch": "Refresh",
+    "orUploadCustom": "Or upload a custom avatar",
+    "clickToUpload": "Click to upload an image",
+    "uploadSupport": "Supports JPG, PNG, WebP up to 2MB"
+  },
+  "groupMembers": {
+    "title": "Members ({{count}})",
+    "collaborationMode": "Mode:",
+    "maxResponders": "Up to {{count}} members respond each round",
+    "admin": "Admin",
+    "addMembers": "+ Add members",
+    "noAvailableMembers": "All agents are already in this group"
+  },
+  "virtualOffice": {
+    "boardTitle": "Q3 Goals",
+    "coffeeMachine": "Coffee Machine",
+    "statusBar": "{{working}} working · {{idle}} idle",
+    "viewTeamPanel": "View Team Panel >>"
+  },
+  "cronView": {
+    "title": "Scheduled Jobs",
+    "refresh": "Refresh",
+    "status": "Status:",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "jobCount": "Jobs:",
+    "nextWake": "Next wake:",
+    "jobList": "Job List",
+    "showCount": "Showing {{shown}} / Total {{total}}",
+    "loading": "Loading...",
+    "empty": "No scheduled jobs",
+    "expired": "expired"
+  },
+  "modelConfig": {
+    "loadFailed": "Failed to load model config: ",
+    "saved": "Model config saved",
+    "saveFailed": "Save failed: ",
+    "unknownError": "Unknown error",
+    "loading": "Loading...",
+    "activeConfig": "Active Configuration",
+    "primaryModel": "Primary model:",
+    "notSelected": "-- Not selected --",
+    "noApiKey": " (No API Key)",
+    "current": "Current:",
+    "searchPlaceholder": "Search models (filter by ID or name)",
+    "noMatch": "No matching providers or models",
+    "noProviders": "No providers yet, please add one",
+    "saving": "Saving...",
+    "saveConfig": "Save Config",
+    "modelCount": "{{count}} models",
+    "available": "Available {{ms}}ms",
+    "unavailable": "Unavailable",
+    "apiType": "API Type",
+    "note": "Note",
+    "notePlaceholder": "e.g. Company account / Personal test",
+    "modelList": "Model List",
+    "modelIdPlaceholder": "Model ID",
+    "customModel": "Custom Model",
+    "deleteConfirm": "Are you sure you want to delete provider \"{{name}}\"? This action cannot be undone until you save.",
+    "editProvider": "Edit {{name}}",
+    "editProviderDesc": "Configure provider connection and manage model list",
+    "addModel": "Add Model",
+    "suggestedModels": "Suggested Models",
+    "done": "Done",
+    "reasoning": "Reasoning",
+    "providerId": "Provider ID",
+    "addProvider": "Add Provider",
+    "addProviderDesc": "Choose a known AI provider for quick setup, or create a custom one",
+    "searchProviderPlaceholder": "Search providers...",
+    "addCustomProvider": "Custom Provider",
+    "providerCategoryCn": "China",
+    "providerCategoryIntl": "International",
+    "providerCategoryAgg": "Aggregation",
+    "alreadyAdded": "Added"
+  },
+  "orchestration": {
+    "strategy": {
+      "skill-match": {
+        "label": "Smart Match",
+        "description": "Automatically route each question to the most relevant members"
+      },
+      "coordinator": {
+        "label": "Coordinator",
+        "description": "Let one coordinator analyze the task and assign the best responders"
+      },
+      "round-robin": {
+        "label": "Round Robin",
+        "description": "Members take turns answering each request"
+      },
+      "all": {
+        "label": "All Respond",
+        "description": "Every member replies to every request"
+      }
+    }
+  },
+  "changelog": {
+    "title": "Changelog"
+  },
+  "openclawPanel": {
+    "title": "OpenClaw Status",
+    "connection": "Connection",
+    "gateway": "Gateway",
+    "token": "Token",
+    "tokenSet": "Configured",
+    "tokenNone": "Not set",
+    "agents": "AI Team",
+    "mainAgent": "Lead",
+    "noAgents": "No agents found. Please connect to OpenClaw first."
+  },
+  "onboarding": {
+    "title": "Welcome to EasiestClaw AI",
+    "subtitle": "Quick setup so your AI team knows who you are",
+    "avatarSectionTitle": "Choose an avatar",
+    "nameSectionTitle": "Your name",
+    "namePlaceholder": "Enter your name",
+    "getStarted": "Get Started",
+    "skip": "Skip for now",
+    "nameRequired": "Please enter your name first",
+    "extracting": "Extracting OpenClaw...",
+    "gatewayStarting": "Starting OpenClaw...",
+    "gatewayStartingDesc": "First launch may take a few seconds. If a firewall prompt appears, click \"Allow\"",
+    "gatewayConnecting": "Connecting to Gateway...",
+    "gatewayReady": "Gateway ready, loading..."
+  }
+}

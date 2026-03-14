@@ -1,0 +1,94 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14   # Apple Silicon (arm64) — 免费
+            arch: arm64
+          - os: macos-13   # Intel x64
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate icon.icns
+        run: |
+          mkdir -p icon.iconset
+          sips -z 16   16   resources/icon.png --out icon.iconset/icon_16x16.png
+          sips -z 32   32   resources/icon.png --out icon.iconset/icon_16x16@2x.png
+          sips -z 32   32   resources/icon.png --out icon.iconset/icon_32x32.png
+          sips -z 64   64   resources/icon.png --out icon.iconset/icon_32x32@2x.png
+          sips -z 128  128  resources/icon.png --out icon.iconset/icon_128x128.png
+          sips -z 256  256  resources/icon.png --out icon.iconset/icon_128x128@2x.png
+          sips -z 256  256  resources/icon.png --out icon.iconset/icon_256x256.png
+          sips -z 512  512  resources/icon.png --out icon.iconset/icon_256x256@2x.png
+          sips -z 512  512  resources/icon.png --out icon.iconset/icon_512x512.png
+          sips -z 1024 1024 resources/icon.png --out icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o resources/icon.icns
+          rm -rf icon.iconset
+
+      - name: Bundle macOS Node.js
+        run: |
+          NODE_VER=22.12.0
+          curl -fsSL "https://nodejs.org/dist/v${NODE_VER}/node-v${NODE_VER}-darwin-${{ matrix.arch }}.tar.gz" \
+            | tar -xz
+          mkdir -p resources/node
+          cp "node-v${NODE_VER}-darwin-${{ matrix.arch }}/bin/node" resources/node/node
+          chmod +x resources/node/node
+          rm -rf "node-v${NODE_VER}-darwin-${{ matrix.arch }}"
+
+      - name: Bundle OpenClaw
+        run: node scripts/bundle-openclaw.mjs
+        env:
+          npm_config_registry: https://registry.npmjs.org
+
+      - name: Build (electron-vite)
+        run: pnpm run build
+
+      - name: Package DMG
+        run: pnpm exec electron-builder --mac --${{ matrix.arch }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EasiestClaw-mac-${{ matrix.arch }}
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

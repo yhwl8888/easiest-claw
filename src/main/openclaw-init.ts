@@ -1,0 +1,256 @@
+/**
+ * openclaw-init.ts
+ *
+ * OpenClaw 初始化工具函数：
+ * - sanitizeOpenClawConfig     : 启动前清理无效配置字段
+ * - extractOpenClawIfNeeded    : 首次启动时并行解压 openclaw-*.zip，并向渲染进程推送进度
+ */
+
+import { app } from 'electron'
+import type { BrowserWindow } from 'electron'
+import { Worker } from 'worker_threads'
+import { createRequire } from 'module'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'fs'
+import { join } from 'path'
+import { isRecord, readOpenclawConfig, writeOpenclawConfig } from './lib/openclaw-config'
+
+// ── 解压状态（IPC 查询用）─────────────────────────────────────────────────────
+export type ExtractPhase = 'idle' | 'extracting' | 'done' | 'skipped'
+let _extractPhase: ExtractPhase = 'idle'
+let _extractPercent = 0
+
+export function getExtractState(): { phase: ExtractPhase; percent: number } {
+  return { phase: _extractPhase, percent: _extractPercent }
+}
+
+// ── Worker 代码（eval CJS，每个 worker 解压一个 zip）─────────────────────────
+// admZipPath 由主线程通过 workerData 传入，避免 ASAR 内模块路径解析问题
+const WORKER_CODE = `
+'use strict'
+const { workerData, parentPort } = require('worker_threads')
+const AdmZip = require(workerData.admZipPath)
+const { zipPath, destDir } = workerData
+
+const zip = new AdmZip(zipPath)
+const entries = zip.getEntries().filter(e => !e.isDirectory)
+const total = entries.length
+
+;(async () => {
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]
+    try { zip.extractEntryTo(entry.entryName, destDir, true, true) } catch (_) {}
+    if (i % 80 === 0 || i === entries.length - 1) {
+      parentPort.postMessage({ type: 'progress', extracted: i + 1, total, file: entry.entryName })
+      await new Promise(r => setImmediate(r))
+    }
+  }
+  parentPort.postMessage({ type: 'done' })
+})().catch(err => parentPort.postMessage({ type: 'error', message: err.message }))
+`
+
+// ── extractOpenClawIfNeeded ────────────────────────────────────────────────────
+/**
+ * 检查 resourcesPath/openclaw-*.zip 是否需要解压：
+ * - dev 模式 / zip 不存在 → 跳过
+ * - openclaw/.version 与当前 app 版本一致 → 跳过（已解压）
+ * - 否则用 worker_threads 并行解压全部 zip，并通过 IPC 推送聚合进度
+ */
+export async function extractOpenClawIfNeeded(
+  mainWindow: BrowserWindow | null,
+  resourcesPath: string
+): Promise<void> {
+  const ZIP_NAMES = ['openclaw-core.zip', 'openclaw-mods-a.zip', 'openclaw-mods-b.zip']
+  const zipPaths = ZIP_NAMES.map(n => join(resourcesPath, n)).filter(existsSync)
+
+  // dev 模式或未打包时不存在 zip，直接跳过
+  if (zipPaths.length === 0) {
+    _extractPhase = 'skipped'
+    return
+  }
+
+  const destDir = join(resourcesPath, 'openclaw')
+  const markerPath = join(destDir, '.version')
+
+  // 读取本次安装包携带的 openclaw 版本（由 bundle-openclaw.mjs 写入）
+  // 用 openclaw 版本而非 app.getVersion()，避免更新 Shell 时触发不必要的重新解压
+  let currentVersion: string
+  const versionFilePath = join(resourcesPath, 'openclaw.version')
+  try {
+    currentVersion = existsSync(versionFilePath)
+      ? readFileSync(versionFilePath, 'utf8').trim()
+      : app.getVersion()  // 回退：旧包没有此文件时用 app 版本
+  } catch {
+    currentVersion = app.getVersion()
+  }
+
+  // 已解压且版本一致 → 跳过
+  if (existsSync(markerPath)) {
+    try {
+      if (readFileSync(markerPath, 'utf8').trim() === currentVersion) {
+        _extractPhase = 'skipped'
+        return
+      }
+    } catch { /* 读取失败则重新解压 */ }
+  }
+
+  _extractPhase = 'extracting'
+  _extractPercent = 0
+
+  const sendProgress = (percent: number, file: string): void => {
+    _extractPercent = percent
+    _extractPhase = percent >= 100 ? 'done' : 'extracting'
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('openclaw:extract-progress', { percent, file })
+    }
+  }
+
+  sendProgress(0, '')
+
+  // 清除旧版本解压目录
+  if (existsSync(destDir)) {
+    rmSync(destDir, { recursive: true, force: true })
+  }
+
+  // 解析 adm-zip 路径（主线程可正确处理 ASAR，传给 worker 避免重复解析）
+  const _require = createRequire(import.meta.url)
+  const admZipPath: string = _require.resolve('adm-zip')
+
+  // 每个 zip 的独立进度，用于聚合百分比
+  const workerProgress: Record<string, { extracted: number; total: number }> = {}
+  for (const zp of zipPaths) workerProgress[zp] = { extracted: 0, total: 1 }
+
+  const workerPromises = zipPaths.map(
+    (zipPath) =>
+      new Promise<void>((resolve, reject) => {
+        const worker = new Worker(WORKER_CODE, {
+          eval: true,
+          workerData: { zipPath, destDir: resourcesPath, admZipPath },
+        })
+
+        worker.on('message', (msg: { type: string; extracted?: number; total?: number; file?: string; message?: string }) => {
+          if (msg.type === 'progress' && msg.extracted !== undefined && msg.total !== undefined) {
+            workerProgress[zipPath] = { extracted: msg.extracted, total: msg.total }
+            const totalExtracted = Object.values(workerProgress).reduce((s, p) => s + p.extracted, 0)
+            const totalFiles = Object.values(workerProgress).reduce((s, p) => s + p.total, 0)
+            const percent = totalFiles > 0 ? Math.round((totalExtracted / totalFiles) * 100) : 0
+            sendProgress(Math.min(percent, 99), msg.file ?? '')
+          } else if (msg.type === 'done') {
+            resolve()
+          } else if (msg.type === 'error') {
+            reject(new Error(msg.message))
+          }
+        })
+
+        worker.on('error', reject)
+        worker.on('exit', (code) => {
+          if (code !== 0) reject(new Error(`Worker exited with code ${code}`))
+        })
+      })
+  )
+
+  await Promise.all(workerPromises)
+
+  // 写入版本标志，下次启动跳过解压
+  mkdirSync(destDir, { recursive: true })
+  writeFileSync(markerPath, currentVersion)
+  sendProgress(100, '')
+}
+
+
+// ── sanitizeOpenClawConfig ─────────────────────────────────────────────────────
+/**
+ * 清理 ~/.openclaw/openclaw.json 中的无效或缺失字段，防止 gateway 启动时 Zod 校验失败。
+ * 在每次 fork gateway 之前调用。
+ */
+export function sanitizeOpenClawConfig(): void {
+  const raw = readOpenclawConfig()
+  let config = { ...raw }
+  let modified = false
+
+  // ── tools.profile = 'full'（OpenClaw 3.8+ 必需）────────────────────────────
+  const tools = { ...((config.tools as Record<string, unknown>) ?? {}) }
+  const sessions = { ...((tools.sessions as Record<string, unknown>) ?? {}) }
+  let toolsModified = false
+
+  if (tools.profile !== 'full') {
+    tools.profile = 'full'
+    toolsModified = true
+  }
+  if (sessions.visibility !== 'all') {
+    sessions.visibility = 'all'
+    tools.sessions = sessions
+    toolsModified = true
+  }
+
+  if (toolsModified) {
+    config = { ...config, tools }
+    modified = true
+    console.log('[Sanitize] 已设置 tools.profile=full, tools.sessions.visibility=all')
+  }
+
+  // ── commands.restart = true（优雅重载支持）──────────────────────────────────
+  const commands = { ...((config.commands as Record<string, unknown>) ?? {}) }
+  if (commands.restart !== true) {
+    config = { ...config, commands: { ...commands, restart: true } }
+    modified = true
+    console.log('[Sanitize] 已启用 commands.restart')
+  }
+
+  // ── skills: 删除无效根键 ─────────────────────────────────────────────────────
+  const skills = config.skills
+  if (isRecord(skills)) {
+    const skillsObj = { ...(skills as Record<string, unknown>) }
+    let skillsModified = false
+    for (const key of ['enabled', 'disabled']) {
+      if (key in skillsObj) {
+        delete skillsObj[key]
+        skillsModified = true
+        console.log(`[Sanitize] 移除无效字段 skills.${key}`)
+      }
+    }
+    if (skillsModified) {
+      config = { ...config, skills: skillsObj }
+      modified = true
+    }
+  }
+
+  // ── controlUi: openclaw schema 不认识该根级键，删除 ────────────────────────────
+  if ('controlUi' in config) {
+    const { controlUi: _removed, ...rest } = config
+    config = rest
+    modified = true
+    console.log('[Sanitize] 移除无效根键 controlUi')
+  }
+
+  // ── agents.list[*] 中的无效字段（如 runtime）────────────────────────────────
+  const agentsSection = config.agents as Record<string, unknown> | undefined
+  if (agentsSection) {
+    const list = agentsSection.list
+    if (Array.isArray(list)) {
+      const INVALID_AGENT_KEYS = ['runtime']
+      let agentListModified = false
+      const cleanedList = list.map((agent) => {
+        if (!agent || typeof agent !== 'object') return agent
+        const agentObj = agent as Record<string, unknown>
+        const keysToRemove = INVALID_AGENT_KEYS.filter((k) => k in agentObj)
+        if (keysToRemove.length === 0) return agent
+        agentListModified = true
+        const cleaned = { ...agentObj }
+        for (const k of keysToRemove) {
+          delete cleaned[k]
+          console.log(`[Sanitize] 移除 agents.list 中的无效字段: ${k}`)
+        }
+        return cleaned
+      })
+      if (agentListModified) {
+        config = { ...config, agents: { ...agentsSection, list: cleanedList } }
+        modified = true
+      }
+    }
+  }
+
+  if (modified) {
+    writeOpenclawConfig(config)
+    console.log('[Sanitize] openclaw.json 清理完成')
+  }
+}

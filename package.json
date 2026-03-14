@@ -1,0 +1,124 @@
+{
+  "name": "easiest-claw-desktop",
+  "version": "0.1.0",
+  "description": "EasiestClaw Desktop - OpenClaw GUI",
+  "main": "./out/main/index.js",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "bundle:openclaw": "node scripts/bundle-openclaw.mjs",
+    "build:win": "npm run bundle:openclaw && npm run build && electron-builder --win",
+    "build:mac": "npm run bundle:openclaw && npm run build && electron-builder --mac",
+    "build:linux": "npm run bundle:openclaw && npm run build && electron-builder --linux",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "@base-ui/react": "^1.2.0",
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "lucide-react": "^0.577.0",
+    "next-themes": "^0.4.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
+    "react-resizable-panels": "^4.7.1",
+    "remark-gfm": "^4.0.1",
+    "shadcn": "^4.0.0",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.5.0",
+    "tw-animate-css": "^1.4.0",
+    "ws": "^8.19.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "msw"
+    ]
+  },
+  "devDependencies": {
+    "@electron-toolkit/eslint-config-prettier": "^2.0.0",
+    "@electron-toolkit/eslint-config-ts": "^2.0.0",
+    "@electron-toolkit/tsconfig": "^1.0.1",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/adm-zip": "^0.5.7",
+    "@types/archiver": "^6.0.3",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^35.1.2",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.0.0",
+    "archiver": "^7.0.1",
+    "eslint": "^9.21.0",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4.0.9",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.0"
+  },
+  "build": {
+    "appId": "com.EasiestClaw.desktop",
+    "productName": "EasiestClaw",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/node",
+        "to": "node",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "build/openclaw-core.zip",
+        "to": "openclaw-core.zip"
+      },
+      {
+        "from": "build/openclaw-mods-a.zip",
+        "to": "openclaw-mods-a.zip"
+      },
+      {
+        "from": "build/openclaw-mods-b.zip",
+        "to": "openclaw-mods-b.zip"
+      },
+      {
+        "from": "build/openclaw.version",
+        "to": "openclaw.version"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico",
+      "oneClick": false,
+      "allowElevation": true,
+      "perMachine": false,
+      "include": "resources/installer.nsh"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "resources/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "resources/icon.png"
+    }
+  }
+}
