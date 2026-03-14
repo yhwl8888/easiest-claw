@@ -170,8 +170,10 @@ const ipcApi = {
     extractProgressCallbacks.add(callback)
     return () => extractProgressCallbacks.delete(callback)
   },
-  extractStatus: (): Promise<{ phase: string; percent: number }> =>
+  extractStatus: (): Promise<{ phase: string; percent: number; upgradeFrom?: string; upgradeTo?: string }> =>
     ipcRenderer.invoke('openclaw:extract-status'),
+  openclawUpgradeConfirm: () => ipcRenderer.invoke('openclaw:upgrade-confirm'),
+  openclawUpgradeSkip: () => ipcRenderer.invoke('openclaw:upgrade-skip'),
 
   // ── Gateway log (main → renderer) ─────────────────────────────────────────
   onGatewayLog: (callback: GatewayLogCallback) => {
@@ -210,6 +212,10 @@ const ipcApi = {
 
   // ── Dialog ────────────────────────────────────────────────────────────────
   selectDirectory: () => ipcRenderer.invoke('dialog:select-directory'),
+
+  // ── Provider health check (main process, avoids CORS) ─────────────────────
+  providerHealthCheck: (params: { baseUrl: string; apiKey: string; api: string }) =>
+    ipcRenderer.invoke('provider:health-check', params),
 
   // ── File path (Electron 32+ replaces deprecated file.path) ───────────────
   getFilePath: (file: File) => webUtils.getPathForFile(file),

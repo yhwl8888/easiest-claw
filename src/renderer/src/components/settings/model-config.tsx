@@ -204,20 +204,17 @@ export function ModelConfigPanel() {
     setHealthChecking((prev) => ({ ...prev, [providerId]: true }))
     const start = Date.now()
     try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 10000)
-      const baseUrl = provider.baseUrl.replace(/\/+$/, "")
-      const res = await fetch(`${baseUrl}/models`, {
-        headers: { Authorization: `Bearer ${provider.apiKey}` },
-        signal: controller.signal,
+      const result = await window.ipc.providerHealthCheck({
+        baseUrl: provider.baseUrl,
+        apiKey: provider.apiKey,
+        api: provider.api,
       })
-      clearTimeout(timer)
       setHealthResults((prev) => ({
         ...prev,
         [providerId]: {
-          healthy: res.ok,
-          latencyMs: Date.now() - start,
-          error: res.ok ? undefined : `HTTP ${res.status}`,
+          healthy: result.healthy,
+          latencyMs: result.latencyMs ?? (Date.now() - start),
+          error: result.error,
         },
       }))
     } catch (err) {

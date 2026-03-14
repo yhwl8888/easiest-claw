@@ -16,8 +16,11 @@ resources/node/
 .idea/
 .vscode/
 
-# Claude Code 私有会话文件
-.claude/
+# Claude Code 私有会话文件（settings.local.json 含个人配置，不入库）
+# 用 .claude/* 而非 .claude/ 才能让 !.claude/skills/ 例外生效
+.claude/*
+# 项目级 skills 对所有贡献者可用，需要入库
+!.claude/skills/
 
 # 系统文件
 .DS_Store
@@ -32,3 +35,6 @@ CLAUDE.md
 
 # npm 镜像配置（本地开发用，不入库）
 .npmrc
+
+# 本地备忘录
+NOTES.md

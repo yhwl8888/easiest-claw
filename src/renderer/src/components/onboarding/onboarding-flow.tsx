@@ -3,6 +3,7 @@ import { Loader2, Wifi, Minus, X } from "lucide-react"
 import { Camera } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { APP_NAME } from "@shared/branding"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
@@ -104,10 +105,10 @@ function GatewayLoadingStep() {
 
   return (
     <div className="flex flex-col items-center justify-center gap-6 text-center">
-      <img src={logoSvg} alt="EasiestClaw" className="h-16 w-auto" />
+      <img src={logoSvg} alt={APP_NAME} className="h-16 w-auto" />
 
       <div className="space-y-1">
-        <h1 className="text-xl font-semibold">EasiestClaw</h1>
+        <h1 className="text-xl font-semibold">{APP_NAME}</h1>
       </div>
 
       {isExtracting ? (

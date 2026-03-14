@@ -6,8 +6,9 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerAllIpcHandlers } from './ipc'
 import { startRuntime, stopRuntime } from './gateway/runtime'
 import { autoSpawnBundledOpenclaw, addGatewayLogListener } from './gateway/bundled-process'
-import { extractOpenClawIfNeeded, getExtractState } from './openclaw-init'
+import { extractOpenClawIfNeeded, getExtractState, confirmUpgrade, skipUpgrade } from './openclaw-init'
 import { logger } from './lib/logger'
+import { FIREWALL_RULE_NAME, APP_ID } from '@shared/branding'
 
 // App icon（开发和生产均用同一份，electron-builder 打包时也从 package.json 读取）
 const APP_ICON = join(app.getAppPath(), 'resources', 'icon.ico')
@@ -20,7 +21,7 @@ async function ensureFirewallRule(): Promise<void> {
   await new Promise<void>((resolve) => {
     const child = spawn('netsh', [
       'advfirewall', 'firewall', 'add', 'rule',
-      'name=EasiestClaw', 'dir=in', 'action=allow',
+      'name=' + FIREWALL_RULE_NAME, 'dir=in', 'action=allow',
       `program=${process.execPath}`, 'enable=yes', 'protocol=TCP'
     ], { windowsHide: true })
     child.on('close', (code) => {
@@ -116,7 +117,7 @@ app.whenReady().then(async () => {
   logger.info(`[Startup] App ready — v${app.getVersion()} pid=${process.pid} platform=${process.platform}`)
   logger.info(`[Startup] Log file: ${logger.getPath()}`)
 
-  electronApp.setAppUserModelId('com.EasiestClaw.desktop')
+  electronApp.setAppUserModelId(APP_ID)
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -129,6 +130,9 @@ app.whenReady().then(async () => {
 
   // 渲染进程可以随时查询当前解压状态（用于挂载后补偿错过的进度推送）
   ipcMain.handle('openclaw:extract-status', () => getExtractState())
+  // 用户决定是否升级内置 OpenClaw
+  ipcMain.handle('openclaw:upgrade-confirm', () => { confirmUpgrade() })
+  ipcMain.handle('openclaw:upgrade-skip', () => { skipUpgrade() })
 
   // Windows: 先等防火墙规则添加完毕，再启动 Gateway。
   // 若两者并行，Gateway 抢先监听端口会触发系统防火墙弹窗，阻塞用户操作。

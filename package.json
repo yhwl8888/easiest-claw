@@ -1,6 +1,6 @@
 {
   "name": "easiest-claw-desktop",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "EasiestClaw Desktop - OpenClaw GUI",
   "main": "./out/main/index.js",
   "private": true,
@@ -8,6 +8,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "brand": "node scripts/apply-branding.mjs",
+    "release": "node scripts/release.mjs",
     "bundle:openclaw": "node scripts/bundle-openclaw.mjs",
     "build:win": "npm run bundle:openclaw && npm run build && electron-builder --win",
     "build:mac": "npm run bundle:openclaw && npm run build && electron-builder --mac",

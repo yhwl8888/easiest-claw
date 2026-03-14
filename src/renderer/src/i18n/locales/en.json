@@ -334,6 +334,12 @@
     "gatewayStarting": "Starting OpenClaw...",
     "gatewayStartingDesc": "First launch may take a few seconds. If a firewall prompt appears, click \"Allow\"",
     "gatewayConnecting": "Connecting to Gateway...",
-    "gatewayReady": "Gateway ready, loading..."
+    "gatewayReady": "Gateway ready, loading...",
+    "upgradeTitle": "OpenClaw Update Available",
+    "upgradeDesc": "This app update includes a new version of OpenClaw. Would you like to upgrade? This will re-extract the runtime files (about 1–2 minutes).",
+    "upgradeFrom": "Current version",
+    "upgradeTo": "New version",
+    "upgradeConfirm": "Upgrade Now",
+    "upgradeSkip": "Skip for Now"
   }
 }

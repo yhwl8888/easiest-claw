@@ -16,12 +16,34 @@ import { isRecord, readOpenclawConfig, writeOpenclawConfig } from './lib/opencla
 import { logger } from './lib/logger'
 
 // ── 解压状态（IPC 查询用）─────────────────────────────────────────────────────
-export type ExtractPhase = 'idle' | 'extracting' | 'done' | 'skipped'
+export type ExtractPhase = 'idle' | 'extracting' | 'done' | 'skipped' | 'upgrade-available'
 let _extractPhase: ExtractPhase = 'idle'
 let _extractPercent = 0
+let _upgradeFrom = ''
+let _upgradeTo = ''
+let _pendingUpgrade: { resolve: (confirmed: boolean) => void } | null = null
 
-export function getExtractState(): { phase: ExtractPhase; percent: number } {
-  return { phase: _extractPhase, percent: _extractPercent }
+export function getExtractState(): {
+  phase: ExtractPhase
+  percent: number
+  upgradeFrom?: string
+  upgradeTo?: string
+} {
+  return {
+    phase: _extractPhase,
+    percent: _extractPercent,
+    ...(_extractPhase === 'upgrade-available' ? { upgradeFrom: _upgradeFrom, upgradeTo: _upgradeTo } : {}),
+  }
+}
+
+export function confirmUpgrade(): void {
+  _pendingUpgrade?.resolve(true)
+  _pendingUpgrade = null
+}
+
+export function skipUpgrade(): void {
+  _pendingUpgrade?.resolve(false)
+  _pendingUpgrade = null
 }
 
 // ── Worker 代码（eval CJS，每个 worker 解压一个 zip）─────────────────────────
@@ -88,12 +110,29 @@ export async function extractOpenClawIfNeeded(
   // 已解压且版本一致 → 跳过
   if (existsSync(markerPath)) {
     try {
-      if (readFileSync(markerPath, 'utf8').trim() === currentVersion) {
+      const installedVersion = readFileSync(markerPath, 'utf8').trim()
+      if (installedVersion === currentVersion) {
         logger.info(`[Extract] 已解压且版本一致 (${currentVersion})，跳过`)
         _extractPhase = 'skipped'
         return
       }
-    } catch { /* 读取失败则重新解压 */ }
+      // 版本不同：已安装旧版，询问用户是否升级
+      logger.info(`[Extract] 检测到 OpenClaw 版本变化: ${installedVersion} → ${currentVersion}，等待用户决定`)
+      _upgradeFrom = installedVersion
+      _upgradeTo = currentVersion
+      _extractPhase = 'upgrade-available'
+      const confirmed = await new Promise<boolean>((resolve) => {
+        _pendingUpgrade = { resolve }
+      })
+      if (!confirmed) {
+        logger.info('[Extract] 用户跳过升级，继续使用已安装版本')
+        _extractPhase = 'skipped'
+        return
+      }
+      logger.info('[Extract] 用户确认升级，开始解压')
+    } catch {
+      // 读取标记文件失败：视为首次安装，直接解压
+    }
   }
 
   logger.info(`[Extract] 开始解压 openclaw (${zipPaths.length} 个 zip)，目标版本: ${currentVersion}`)

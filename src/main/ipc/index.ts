@@ -9,6 +9,7 @@ import { registerRuntimeHandlers } from './runtime-read'
 import { registerSettingsHandlers } from './settings'
 import { registerSkillsHandlers } from './skills'
 import { registerUpdateHandlers } from './update'
+import { registerProviderHealthHandlers } from './provider-health'
 
 export const registerAllIpcHandlers = (ipcMain: IpcMain): void => {
   registerChatHandlers(ipcMain)
@@ -21,4 +22,5 @@ export const registerAllIpcHandlers = (ipcMain: IpcMain): void => {
   registerSettingsHandlers(ipcMain)
   registerSkillsHandlers(ipcMain)
   registerUpdateHandlers(ipcMain)
+  registerProviderHealthHandlers(ipcMain)
 }

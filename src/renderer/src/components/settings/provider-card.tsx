@@ -347,6 +347,10 @@ interface ModelRowProps {
 
 function ModelRow({ model, onUpdate, onDelete }: ModelRowProps) {
   const { t } = useI18n()
+  const hasVision = Array.isArray(model.input) && model.input.includes("image")
+  const toggleVision = () => {
+    onUpdate({ input: hasVision ? ["text"] : ["text", "image"] })
+  }
   return (
     <div className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs bg-background">
       <div className="flex-1 min-w-0">
@@ -364,6 +368,14 @@ function ModelRow({ model, onUpdate, onDelete }: ModelRowProps) {
           onClick={() => onUpdate({ reasoning: !model.reasoning })}
         >
           {t("modelConfig.reasoning")}
+        </Button>
+        <Button
+          variant={hasVision ? "default" : "outline"}
+          size="xs"
+          className="text-[10px] h-5 px-1.5"
+          onClick={toggleVision}
+        >
+          {t("modelConfig.vision")}
         </Button>
         <Button variant="ghost" size="icon-xs" onClick={onDelete}>
           <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />

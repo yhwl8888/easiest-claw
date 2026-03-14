@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { SETTINGS_DIR_NAME } from '@shared/branding'
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ const readOpenclawDefaults = (): { url: string; token: string } | null => {
 // ── Settings file: ~/.openclaw/EasiestClaw-desktop/settings.json ───────────────────
 
 const settingsPath = (): string =>
-  path.join(resolveStateDir(), 'EasiestClaw-desktop', 'settings.json')
+  path.join(resolveStateDir(), SETTINGS_DIR_NAME, 'settings.json')
 
 export const loadSettings = (): AppSettings => {
   const p = settingsPath()
