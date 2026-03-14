@@ -63,6 +63,8 @@ function GatewayLoadingStep() {
   const [extractPercent, setExtractPercent] = useState<number | null>(null)
   const [extractLog, setExtractLog] = useState<string[]>([])
   const [gatewayLog, setGatewayLog] = useState<string[]>([])
+  // 升级提示：upgradeInfo 非 null 时展示升级确认卡片
+  const [upgradeInfo, setUpgradeInfo] = useState<{ from: string; to: string } | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
   const gwLogRef = useRef<HTMLDivElement>(null)
   const isExtracting = extractPercent !== null && extractPercent < 100
@@ -86,12 +88,30 @@ function GatewayLoadingStep() {
       })
     })
     // 补偿：渲染进程挂载前已开始解压时，主动查询当前状态
-    window.ipc.extractStatus().then(({ phase, percent }) => {
-      if (phase === 'extracting') setExtractPercent(percent)
-      else if (phase === 'done' || phase === 'skipped') setExtractPercent(100)
+    window.ipc.extractStatus().then(({ phase, percent, upgradeFrom, upgradeTo }) => {
+      if (phase === 'extracting') {
+        setExtractPercent(percent)
+      } else if (phase === 'done' || phase === 'skipped') {
+        setExtractPercent(100)
+      } else if (phase === 'upgrade-available' && upgradeFrom && upgradeTo) {
+        // 主进程在等待用户决定是否升级，弹出提示卡片
+        setUpgradeInfo({ from: upgradeFrom, to: upgradeTo })
+      }
     }).catch(() => { /* ignore */ })
     return () => { unsubExtract(); unsubGwLog() }
   }, [])
+
+  const handleUpgradeConfirm = async () => {
+    setUpgradeInfo(null)
+    await window.ipc.openclawUpgradeConfirm()
+    // 主进程收到确认后开始解压，进度事件会通过 onExtractProgress 推过来
+  }
+
+  const handleUpgradeSkip = async () => {
+    setUpgradeInfo(null)
+    await window.ipc.openclawUpgradeSkip()
+    // 跳过后主进程继续用已安装版本，直接启动 gateway
+  }
 
   // 解压日志自动滚到底部
   useEffect(() => {
@@ -102,6 +122,40 @@ function GatewayLoadingStep() {
   useEffect(() => {
     if (gwLogRef.current) gwLogRef.current.scrollTop = gwLogRef.current.scrollHeight
   }, [gatewayLog])
+
+  // ── 升级确认卡片 ──────────────────────────────────────────────────────────
+  if (upgradeInfo) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-6 text-center">
+        <img src={logoSvg} alt={APP_NAME} className="h-16 w-auto" />
+        <div className="w-[400px] rounded-xl border bg-card p-6 text-left space-y-4 shadow-md">
+          <h2 className="text-base font-semibold">{t("onboarding.upgradeTitle")}</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {t("onboarding.upgradeDesc")}
+          </p>
+          <div className="flex gap-6 text-sm">
+            <div>
+              <span className="text-xs text-muted-foreground">{t("onboarding.upgradeFrom")}</span>
+              <p className="font-mono font-medium">{upgradeInfo.from}</p>
+            </div>
+            <div className="text-muted-foreground self-end pb-0.5">→</div>
+            <div>
+              <span className="text-xs text-muted-foreground">{t("onboarding.upgradeTo")}</span>
+              <p className="font-mono font-medium text-primary">{upgradeInfo.to}</p>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button className="flex-1" onClick={handleUpgradeConfirm}>
+              {t("onboarding.upgradeConfirm")}
+            </Button>
+            <Button variant="outline" className="flex-1" onClick={handleUpgradeSkip}>
+              {t("onboarding.upgradeSkip")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col items-center justify-center gap-6 text-center">
