@@ -26,7 +26,7 @@ export type AppAction =
   | { type: "SET_FLEET"; payload: { seeds: AgentSeed[]; mainAgentId: string | null } }
   | { type: "APPEND_STREAMING_CONTENT"; payload: { conversationId: string; messageId: string; delta: string } }
   | { type: "GATEWAY_EVENT"; payload: GatewayEvent }
-  | { type: "LOAD_HISTORY"; payload: { conversationId: string; agentId: string; messages: HistoryMessage[] } }
+  | { type: "LOAD_HISTORY"; payload: { conversationId: string; agentId: string; messages: HistoryMessage[]; attachmentOverrides?: ChatAttachment[][] } }
   | { type: "LOAD_GROUPS"; payload: Conversation[] }
   | { type: "LOAD_GROUP_MESSAGES"; payload: Record<string, Message[]> }
   | { type: "UPDATE_GROUP_ORCHESTRATION"; payload: { conversationId: string; orchestration: GroupOrchestration } }

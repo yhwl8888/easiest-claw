@@ -29,10 +29,10 @@ import {
   loadGroupsFromStorage,
   loadGroupMessagesFromStorage,
 } from "./app-storage"
-import { uniqueId, parseViewFromHash } from "./app-utils"
+import { uniqueId, parseViewFromHash, extractTextContent, extractImageAttachments } from "./app-utils"
+import { saveAttachmentCacheDb, popAttachmentCacheDb } from "@/lib/db"
 
-function buildWorkspacePrompt(workspacePath: string, content: string): string {
-  return [
+function buildWorkspacePrompt(workspacePath: string, content: string): string {  return [
     `【共享工作区 - 重要】`,
     `本次任务在多智能体协作项目中进行，请严格遵守以下规则：`,
     `1. 你的工作目录是：${workspacePath}`,
@@ -42,6 +42,21 @@ function buildWorkspacePrompt(workspacePath: string, content: string): string {
     `---`,
     content,
   ].join('\n')
+}
+
+/** 在 dispatch LOAD_HISTORY 前，异步预取 IndexedDB 附件缓存（OpenClaw 会剥离超限图片）*/
+async function prefetchAttachmentOverrides(
+  convId: string,
+  messages: import("@/hooks/use-openclaw").HistoryMessage[]
+): Promise<ChatAttachment[][]> {
+  return Promise.all(
+    messages.map(async (m) => {
+      if (m.role !== "user") return []
+      if (extractImageAttachments(m.content).length > 0) return []
+      const text = extractTextContent(m.content)
+      return popAttachmentCacheDb(convId, text)
+    })
+  )
 }
 
 
@@ -70,17 +85,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (result?.seeds && result.seeds.length > 0) {
       dispatch({ type: "SET_FLEET", payload: { seeds: result.seeds, mainAgentId: result.mainAgentId ?? null } })
       for (const seed of result.seeds) {
-        loadHistory(seed.agentId).then((messages) => {
-          if (messages.length > 0) {
-            dispatch({
-              type: "LOAD_HISTORY",
-              payload: {
-                conversationId: `conv-${seed.agentId}`,
-                agentId: seed.agentId,
-                messages,
-              },
-            })
-          }
+        const convId = `conv-${seed.agentId}`
+        loadHistory(seed.agentId).then(async (messages) => {
+          if (messages.length === 0) return
+          const attachmentOverrides = await prefetchAttachmentOverrides(convId, messages)
+          dispatch({
+            type: "LOAD_HISTORY",
+            payload: {
+              conversationId: convId,
+              agentId: seed.agentId,
+              messages,
+              attachmentOverrides,
+            },
+          })
         })
       }
     }
@@ -204,17 +221,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "SET_FLEET", payload: { seeds: result.seeds, mainAgentId: result.mainAgentId ?? null } })
         // Load chat history for each agent
         for (const seed of result.seeds) {
-          loadHistory(seed.agentId).then((messages) => {
-            if (messages.length > 0) {
-              dispatch({
-                type: "LOAD_HISTORY",
-                payload: {
-                  conversationId: `conv-${seed.agentId}`,
-                  agentId: seed.agentId,
-                  messages,
-                },
-              })
-            }
+          const convId = `conv-${seed.agentId}`
+          loadHistory(seed.agentId).then(async (messages) => {
+            if (messages.length === 0) return
+            const attachmentOverrides = await prefetchAttachmentOverrides(convId, messages)
+            dispatch({
+              type: "LOAD_HISTORY",
+              payload: {
+                conversationId: convId,
+                agentId: seed.agentId,
+                messages,
+                attachmentOverrides,
+              },
+            })
           })
         }
       }
@@ -252,6 +271,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const sendMessage = useCallback(
     (conversationId: string, content: string, attachments?: ChatAttachment[]) => {
       dispatch({ type: "SEND_MESSAGE", payload: { conversationId, content, attachments } })
+
+      const imageAtts = (attachments ?? []).filter((a) => !!a.dataUrl)
+      if (imageAtts.length > 0) {
+        saveAttachmentCacheDb(conversationId, content, imageAtts).catch(() => {})
+      }
 
       const conv = stateRef.current.conversations.find((c) => c.id === conversationId)
       if (!conv) return
