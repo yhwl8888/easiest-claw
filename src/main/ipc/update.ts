@@ -80,26 +80,6 @@ function getOpenclawDir(): string | null {
   return null
 }
 
-function getNpmArgs(version: string, registry: string): { cmd: string; args: string[]; shell: boolean } {
-  const nodeDir = app.isPackaged
-    ? join(process.resourcesPath, 'node')
-    : join(app.getAppPath(), 'resources', 'node')
-
-  const installArgs = ['install', `openclaw@${version}`, '--registry', registry, '--no-audit', '--no-fund']
-
-  if (process.platform === 'win32') {
-    const cmd = join(nodeDir, 'npm.cmd')
-    if (!existsSync(cmd)) throw new Error(`找不到内置 npm: ${cmd}`)
-    return { cmd, args: installArgs, shell: true }
-  } else {
-    // macOS / Linux：直接用 node 运行 npm-cli.js，避免 shell 脚本相对路径问题
-    const nodeExe = join(nodeDir, 'node')
-    const npmCli = join(nodeDir, 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js')
-    if (!existsSync(npmCli)) throw new Error(`找不到内置 npm-cli: ${npmCli}`)
-    return { cmd: nodeExe, args: [npmCli, ...installArgs], shell: false }
-  }
-}
-
 // ── 版本比较（支持 YYYY.M.D 和 semver，忽略提交哈希后缀）──────────────────────
 function parseVersion(v: string): number[] {
   // 去掉空格后的内容：'2026.3.8 (3caab92)' → '2026.3.8'
@@ -143,50 +123,167 @@ async function readCurrentVersion(): Promise<string | null> {
 // ── 升级执行 ──────────────────────────────────────────────────────────────────
 type ProgressSender = (step: string, status: 'running' | 'done' | 'error', detail?: string) => void
 
-async function runNpmInstall(
-  version: string, tmpDir: string, send: ProgressSender
-): Promise<boolean> {
-  // libsignal-node 是 git 依赖，国内无法访问；用本地 stub 替代
-  const stubDir = join(tmpDir, '_stubs', 'libsignal-node')
-  await fs.promises.mkdir(stubDir, { recursive: true })
-  await fs.promises.writeFile(
-    join(stubDir, 'package.json'),
-    JSON.stringify({ name: 'libsignal-node', version: '5.0.0', main: 'index.js' })
-  )
-  await fs.promises.writeFile(join(stubDir, 'index.js'), 'module.exports = {};\n')
-  await fs.promises.writeFile(join(tmpDir, 'package.json'), JSON.stringify({
-    name: '_openclaw_update', version: '1.0.0', private: true,
-    overrides: { 'libsignal-node': `file:${stubDir.replace(/\\/g, '/')}` },
-  }))
+// ── 直接下载 tarball（无需 git）──────────────────────────────────────────────
 
-  const tryInstall = (registry: string): Promise<boolean> => {
-    const { cmd, args, shell } = getNpmArgs(version, registry)
-    return new Promise((resolve) => {
-      const child = spawn(cmd, args, { cwd: tmpDir, shell, windowsHide: true })
-      const handleOut = (data: Buffer) => {
-        for (const line of data.toString().split('\n')) {
-          if (line.trim()) send('download', 'running', line.trim())
-        }
-      }
-      child.stdout?.on('data', handleOut)
-      child.stderr?.on('data', handleOut)
-      child.on('close', (code) => resolve(code === 0))
-      child.on('error', () => resolve(false))
+/** 从 registry 获取指定版本的 tarball 下载 URL */
+async function fetchTarballUrl(version: string, registry: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const req = https.get(`${registry}/openclaw/${encodeURIComponent(version)}`, { timeout: 15_000 }, (res) => {
+      let data = ''
+      res.on('data', (chunk: Buffer) => { data += chunk.toString() })
+      res.on('end', () => {
+        try {
+          const meta = JSON.parse(data) as { dist?: { tarball?: string } }
+          resolve(meta.dist?.tarball ?? null)
+        } catch { resolve(null) }
+      })
     })
+    req.on('error', () => resolve(null))
+    req.on('timeout', () => { req.destroy(); resolve(null) })
+  })
+}
+
+/** 下载文件到本地路径（支持 HTTP 重定向） */
+function downloadFile(url: string, dest: string, maxRedirects = 5): Promise<boolean> {
+  return new Promise((resolve) => {
+    const tryGet = (u: string, left: number) => {
+      https.get(u, { timeout: 120_000 }, (res) => {
+        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location && left > 0) {
+          res.resume()
+          tryGet(res.headers.location, left - 1)
+          return
+        }
+        if (res.statusCode !== 200) { res.resume(); resolve(false); return }
+        const file = fs.createWriteStream(dest)
+        res.pipe(file)
+        file.on('finish', () => { file.close(); resolve(true) })
+        file.on('error', () => resolve(false))
+      }).on('error', () => resolve(false))
+    }
+    tryGet(url, maxRedirects)
+  })
+}
+
+/** 将 package.json 中所有 git URL 依赖替换为本地空 stub，避免 npm install 调用 git */
+async function patchGitDeps(pkgDir: string, stubsDir: string, send: ProgressSender): Promise<void> {
+  const pkgJsonPath = join(pkgDir, 'package.json')
+  try {
+    const pkgJson = JSON.parse(await fs.promises.readFile(pkgJsonPath, 'utf8')) as Record<string, unknown>
+    const deps = pkgJson.dependencies as Record<string, string> | undefined
+    if (!deps) return
+    let modified = false
+    for (const [name, ver] of Object.entries(deps)) {
+      const isGit = typeof ver === 'string' && (
+        ver.startsWith('git+') || ver.startsWith('git://') ||
+        ver.startsWith('github:') || ver.startsWith('bitbucket:') ||
+        /^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]/.test(ver)  // shorthand: "user/repo"
+      )
+      if (!isGit) continue
+      const stubDir = join(stubsDir, name.replace(/\//g, '+'))
+      await fs.promises.mkdir(stubDir, { recursive: true })
+      await fs.promises.writeFile(join(stubDir, 'package.json'), JSON.stringify({ name, version: '0.0.1', main: 'index.js' }))
+      await fs.promises.writeFile(join(stubDir, 'index.js'), 'module.exports = {};\n')
+      deps[name] = `file:${stubDir.replace(/\\/g, '/')}`
+      send('download', 'running', `stub git dep: ${name}`)
+      modified = true
+    }
+    if (modified) await fs.promises.writeFile(pkgJsonPath, JSON.stringify(pkgJson, null, 2))
+  } catch { /* 修改失败不中断，让 npm install 继续尝试 */ }
+}
+
+/** 在指定目录内运行 npm install --production --ignore-scripts */
+function runNpmInDir(dir: string, registry: string, send: ProgressSender): Promise<boolean> {
+  const nodeDir = app.isPackaged
+    ? join(process.resourcesPath, 'node')
+    : join(app.getAppPath(), 'resources', 'node')
+
+  const installArgs = ['install', '--production', '--registry', registry,
+    '--no-audit', '--no-fund', '--ignore-scripts', '--no-optional']
+
+  let cmd: string, args: string[], shell: boolean
+  if (process.platform === 'win32') {
+    cmd = join(nodeDir, 'npm.cmd')
+    args = installArgs
+    shell = true
+  } else {
+    const npmCli = join(nodeDir, 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    cmd = join(nodeDir, 'node')
+    args = [npmCli, ...installArgs]
+    shell = false
   }
 
-  // 先用镜像源，失败时 fallback 到官方源
-  send('download', 'running', `正在从 ${REGISTRY} 下载 openclaw@${version}...`)
-  const ok = await tryInstall(REGISTRY)
-  if (ok) return true
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { cwd: dir, shell, windowsHide: true })
+    const handleOut = (data: Buffer) => {
+      for (const line of data.toString().split('\n')) {
+        if (line.trim()) send('download', 'running', line.trim())
+      }
+    }
+    child.stdout?.on('data', handleOut)
+    child.stderr?.on('data', handleOut)
+    child.on('close', (code) => resolve(code === 0))
+    child.on('error', () => resolve(false))
+  })
+}
 
-  send('download', 'running', `镜像源失败，切换到官方源 ${REGISTRY_FALLBACK}...`)
-  // 清理上次失败产物，重新安装
-  try {
-    const mods = join(tmpDir, 'node_modules')
-    if (existsSync(mods)) await fs.promises.rm(mods, { recursive: true, force: true })
-  } catch {}
-  return tryInstall(REGISTRY_FALLBACK)
+/**
+ * 主下载函数：直接下载 tarball → tar 解压 → patch git deps → npm install
+ * 全程不需要系统安装 git。
+ * 返回解压后的 openclaw 包目录路径，失败返回 null。
+ */
+async function downloadAndInstall(
+  version: string, registry: string, tmpDir: string, send: ProgressSender
+): Promise<string | null> {
+  // 1. 获取 tarball URL
+  send('download', 'running', `查询 ${registry} 包信息...`)
+  const tarballUrl = await fetchTarballUrl(version, registry)
+  if (!tarballUrl) {
+    send('download', 'running', `${registry} 无法获取 openclaw@${version} 信息`)
+    return null
+  }
+
+  // 2. 下载 .tgz（纯 HTTPS，无需 npm/git）
+  const tgzPath = join(tmpDir, 'openclaw.tgz')
+  send('download', 'running', `正在下载 openclaw@${version}...`)
+  if (!await downloadFile(tarballUrl, tgzPath)) {
+    send('download', 'running', '下载失败')
+    return null
+  }
+
+  // 3. 用系统内置 tar 解压（Windows 10+ / macOS / Linux 均有）
+  const extractDir = join(tmpDir, 'extracted')
+  await fs.promises.mkdir(extractDir, { recursive: true })
+  send('download', 'running', '正在解压...')
+  const extractOk = await new Promise<boolean>((resolve) => {
+    const child = spawn('tar', ['-xzf', tgzPath, '-C', extractDir], { windowsHide: true })
+    child.on('close', (code) => resolve(code === 0))
+    child.on('error', () => resolve(false))
+  })
+  if (!extractOk) {
+    send('download', 'running', 'tar 解压失败')
+    return null
+  }
+
+  // npm tarball 解压后内容在 package/ 子目录
+  const pkgDir = join(extractDir, 'package')
+  if (!existsSync(pkgDir)) {
+    send('download', 'running', '解压结构异常，找不到 package/ 目录')
+    return null
+  }
+
+  // 4. 将 package.json 中的 git URL 依赖替换为本地空 stub
+  const stubsDir = join(tmpDir, '_stubs')
+  await fs.promises.mkdir(stubsDir, { recursive: true })
+  await patchGitDeps(pkgDir, stubsDir, send)
+
+  // 5. 在解压目录中安装依赖（此时已无 git URL，不需要 git）
+  send('download', 'running', '正在安装依赖...')
+  if (!await runNpmInDir(pkgDir, registry, send)) {
+    send('download', 'running', 'npm install 失败')
+    return null
+  }
+
+  return pkgDir
 }
 
 async function performUpgrade(
@@ -207,20 +304,19 @@ async function performUpgrade(
     }
     send('stop', 'done', 'Gateway 已停止')
 
-    // ── 2. npm install 到临时目录 ─────────────────────────────────────────────
+    // ── 2. 下载 tarball → 解压 → patch git deps → npm install ──────────────────
     send('download', 'running', `正在下载 openclaw@${version}...`)
-    const npmOk = await runNpmInstall(version, tmpDir, send)
-    if (!npmOk) {
-      send('download', 'error', 'npm install 失败，请检查网络或版本号')
-      return { ok: false, error: 'npm install 失败' }
+    let newSrc: string | null = null
+    for (const registry of [REGISTRY, REGISTRY_FALLBACK]) {
+      newSrc = await downloadAndInstall(version, registry, tmpDir, send)
+      if (newSrc) break
+      send('download', 'running', `${registry} 失败，切换到下一个源...`)
+    }
+    if (!newSrc) {
+      send('download', 'error', '下载失败，请检查网络')
+      return { ok: false, error: '下载失败' }
     }
     send('download', 'done', `openclaw@${version} 下载完成`)
-
-    const newSrc = join(tmpDir, 'node_modules', 'openclaw')
-    if (!existsSync(newSrc)) {
-      send('install', 'error', '安装包结构异常，找不到 openclaw 目录')
-      return { ok: false, error: '安装包结构异常' }
-    }
 
     // ── 3. 替换源文件（保留 node_modules，单独处理）────────────────────────────
     send('install', 'running', '正在更新 OpenClaw 源文件...')
@@ -241,13 +337,15 @@ async function performUpgrade(
     send('install', 'running', '正在更新依赖...')
     const outMods = join(openclawDir, 'node_modules')
     await fs.promises.mkdir(outMods, { recursive: true })
-    const tmpMods = join(tmpDir, 'node_modules')
-    const pkgEntries = await fs.promises.readdir(tmpMods)
-    for (const pkg of pkgEntries) {
-      if (pkg === 'openclaw' || pkg === '.package-lock.json') continue
-      const dest = join(outMods, pkg)
-      if (existsSync(dest)) await fs.promises.rm(dest, { recursive: true, force: true })
-      await fs.promises.cp(join(tmpMods, pkg), dest, { recursive: true })
+    const tmpMods = join(newSrc, 'node_modules')
+    if (existsSync(tmpMods)) {
+      const pkgEntries = await fs.promises.readdir(tmpMods)
+      for (const pkg of pkgEntries) {
+        if (pkg === '.package-lock.json') continue
+        const dest = join(outMods, pkg)
+        if (existsSync(dest)) await fs.promises.rm(dest, { recursive: true, force: true })
+        await fs.promises.cp(join(tmpMods, pkg), dest, { recursive: true })
+      }
     }
 
     // ── 5. 删除不需要的大包 ───────────────────────────────────────────────────
