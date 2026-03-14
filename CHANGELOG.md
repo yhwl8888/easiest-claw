@@ -10,6 +10,24 @@
 
 ## [Unreleased]
 
+> 在这里写下一个版本的更新内容，发版时会自动提取为 Release 正文。
+
+### 新增
+
+-
+
+### 修复
+
+-
+
+### 变更
+
+-
+
+---
+
+## [0.0.1] - 2026-03-14
+
 ### 新增
 
 - 品牌信息统一管理：`app.config.mjs` 作为单一配置入口，`pnpm run brand` 同步到所有相关文件（`src/shared/branding.ts`、`resources/installer.nsh`、`package.json`）
@@ -34,3 +52,6 @@
 - `resources/installer.nsh` 改为从 `installer.nsh.template` 模板生成，不再手动编辑
 
 ---
+
+---
+
