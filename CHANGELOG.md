@@ -18,7 +18,7 @@
 
 ### 修复
 
--
+- 修复应用启动时因上次程序内升级未补全依赖导致 Gateway 报 ERR_MODULE_NOT_FOUND：启动前自动检测 node_modules 中的缺失包，有缺失则先用内置 npm 补装再 fork Gateway
 
 ### 变更
 
