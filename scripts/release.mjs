@@ -69,9 +69,10 @@ if (unreleasedStart === -1) {
 }
 if (unreleasedEnd === -1) unreleasedEnd = lines.length
 
-// 提取正文（跳过标题行，去掉首尾空行）
+// 提取正文（跳过标题行、过滤 blockquote 模板提示行，去掉首尾空行）
 const unreleasedBody = lines
   .slice(unreleasedStart + 1, unreleasedEnd)
+  .filter(l => !l.trimStart().startsWith('>')) // 过滤掉 "> 在这里写..." 等提示性 blockquote
   .join('\n')
   .trim()
 
