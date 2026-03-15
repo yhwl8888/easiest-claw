@@ -2,7 +2,7 @@ import type { IpcMain } from 'electron'
 import { app } from 'electron'
 import fs from 'fs'
 import { existsSync } from 'fs'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import os from 'os'
 import https from 'https'
 import { spawn } from 'child_process'
@@ -73,6 +73,34 @@ function getOpenclawDir(): string | null {
     if (existsSync(join(dir, 'openclaw.mjs'))) return dir
   }
   return null
+}
+
+function getBundledNpmBin(): string {
+  const nodeDir = app.isPackaged
+    ? join(process.resourcesPath, 'node')
+    : join(app.getAppPath(), 'resources', 'node')
+  return process.platform === 'win32'
+    ? join(nodeDir, 'npm.cmd')
+    : join(nodeDir, 'npm')
+}
+
+/** 用内置 npm 安装新增依赖（跳过 optional/peer/dev，避免触碰 git URL 依赖） */
+async function runNpmInstall(cwd: string, send: ProgressSender): Promise<boolean> {
+  const npmBin = getBundledNpmBin()
+  const nodeDir = dirname(getBundledNpmBin())
+  const args = ['install', '--omit=optional', '--omit=peer', '--omit=dev', '--ignore-scripts', '--prefer-offline']
+  return new Promise<boolean>((resolve) => {
+    const child = spawn(npmBin, args, {
+      cwd,
+      windowsHide: true,
+      shell: process.platform === 'win32', // npm.cmd 是批处理文件，需要 shell
+      env: { ...process.env, PATH: `${nodeDir}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH}` },
+    })
+    child.stdout?.on('data', (d: Buffer) => { const l = d.toString().trim(); if (l) send('install', 'running', l) })
+    child.stderr?.on('data', (d: Buffer) => { const l = d.toString().trim(); if (l) send('install', 'running', l) })
+    child.on('close', (code) => resolve(code === 0))
+    child.on('error', () => resolve(false))
+  })
 }
 
 // ── 版本比较（支持 YYYY.M.D 和 semver，忽略提交哈希后缀）──────────────────────
@@ -233,10 +261,7 @@ async function performUpgrade(
     }
     send('download', 'done', `openclaw@${version} 下载完成`)
 
-    // ── 3. 替换源文件（保留 node_modules 不动）────────────────────────────────
-    // 策略：升级只替换 dist/ 等源文件，node_modules 沿用上次内置版本。
-    // 原因：tarball 本身不含 node_modules；现有 node_modules 已包含所有依赖
-    //      （含 libsignal-node 等 git URL 依赖的 stub），无需重新安装。
+    // ── 3. 替换源文件（保留 node_modules，step 3.5 再补全新增依赖）───────────────
     send('install', 'running', '正在更新 OpenClaw 源文件...')
     const openclawEntries = await fs.promises.readdir(openclawDir)
     await Promise.all(
@@ -251,6 +276,17 @@ async function performUpgrade(
         .map(entry => fs.promises.cp(join(newSrc, entry), join(openclawDir, entry), { recursive: true }))
     )
     send('install', 'done', `文件更新完成，当前版本 ${version}`)
+
+    // ── 3.5. 补全新增依赖（跳过 optional/peer，不触碰 git URL 依赖）────────────
+    // 新版 openclaw 可能新增了普通 npm 依赖（如 @modelcontextprotocol/sdk），
+    // 需要用内置 npm 补装；libsignal 等 git URL 依赖已是 stub，--omit=optional 跳过。
+    send('install', 'running', '正在补全新增依赖...')
+    const npmOk = await runNpmInstall(openclawDir, send)
+    if (npmOk) {
+      send('install', 'running', '依赖补全完成')
+    } else {
+      send('install', 'running', '依赖补全未完全成功，已继续（部分新功能可能不可用）')
+    }
 
     // ── 4. 写入 easiest-claw-gateway.mjs（含 pm_exec_path 修复）──────────────
     await fs.promises.writeFile(join(openclawDir, 'easiest-claw-gateway.mjs'), EASIEST_CLAW_GATEWAY_SCRIPT)
