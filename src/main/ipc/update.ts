@@ -258,11 +258,12 @@ async function performUpgrade(
     // ── 5. 重启 Gateway ───────────────────────────────────────────────────────
     send('start', 'running', '正在重启 Gateway...')
     const started = await restartBundledGateway()
-    if (!started) {
-      send('start', 'error', 'Gateway 重启超时，请重新打开应用')
-      return { ok: false, error: 'Gateway 重启超时' }
+    if (started) {
+      send('start', 'done', 'Gateway 已重启')
+    } else {
+      // 90s 内未就绪也算升级成功 — Gateway 仍在启动中，自动重试会继续连接
+      send('start', 'done', 'Gateway 正在后台启动，升级已完成，稍后将自动连接')
     }
-    send('start', 'done', 'Gateway 已重启')
 
     return { ok: true }
   } finally {

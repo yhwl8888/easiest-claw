@@ -157,12 +157,21 @@ export function addGatewayLogListener(fn: GatewayLogListener): () => void {
 
 let gatewayProcess: Electron.UtilityProcess | null = null
 
+// 自动重启状态
+let autoRestartCount = 0
+let lastAutoRestartTime = 0
+const MAX_AUTO_RESTARTS = 5
+const AUTO_RESTART_DELAY_MS = 3_000
+const AUTO_RESTART_RESET_INTERVAL_MS = 5 * 60 * 1000 // 5分钟内无重启则重置计数器
+
 export function isBundledGatewayActive(): boolean {
   return gatewayProcess !== null
 }
 
 export function stopGatewayProcess(): void {
   if (gatewayProcess) {
+    // 主动停止：重置自动重启计数，防止 exit 事件触发自动重启
+    autoRestartCount = MAX_AUTO_RESTARTS
     try { gatewayProcess.kill() } catch {}
     gatewayProcess = null
   }
@@ -209,6 +218,26 @@ export function forkOpenclawGateway(entryScript: string, openclawDir: string, to
     logger.warn(`[Gateway] 进程退出 code=${code}`)
     console.log(`[Gateway] process exited (code=${code})`)
     gatewayProcess = null
+
+    // 自动重启：非主动 kill（gatewayProcess 已被设为 null 表示主动停止）时自动重启
+    const now = Date.now()
+    if (now - lastAutoRestartTime > AUTO_RESTART_RESET_INTERVAL_MS) {
+      autoRestartCount = 0
+    }
+    if (autoRestartCount < MAX_AUTO_RESTARTS) {
+      autoRestartCount++
+      lastAutoRestartTime = now
+      logger.info(`[Gateway] 将在 ${AUTO_RESTART_DELAY_MS / 1000}s 后自动重启 (${autoRestartCount}/${MAX_AUTO_RESTARTS})...`)
+      console.log(`[Gateway] 将在 ${AUTO_RESTART_DELAY_MS / 1000}s 后自动重启 (${autoRestartCount}/${MAX_AUTO_RESTARTS})...`)
+      setTimeout(() => {
+        if (gatewayProcess !== null) return // 已被其他逻辑重启，跳过
+        logger.info(`[Gateway] 自动重启中...`)
+        forkOpenclawGateway(entryScript, openclawDir, token)
+      }, AUTO_RESTART_DELAY_MS)
+    } else {
+      logger.warn(`[Gateway] 已达最大自动重启次数 (${MAX_AUTO_RESTARTS})，停止自动重启`)
+      console.warn(`[Gateway] 已达最大自动重启次数 (${MAX_AUTO_RESTARTS})，停止自动重启`)
+    }
   })
 
   gatewayProcess = child
@@ -288,15 +317,15 @@ export async function autoSpawnBundledOpenclaw(): Promise<void> {
   console.log('[AutoSpawn] 正在 fork 内置 OpenClaw Gateway...')
   forkOpenclawGateway(entryScript, openclawDir, token)
 
-  logger.info('[AutoSpawn] 等待 Gateway 就绪（最长 30s）...')
-  const ready = await waitForGatewayReady(30_000)
+  logger.info('[AutoSpawn] 等待 Gateway 就绪（最长 90s）...')
+  const ready = await waitForGatewayReady(90_000)
   if (ready) {
     gatewaySource = 'bundled'
     logger.info('[AutoSpawn] 内置 Gateway 已就绪')
     console.log('[AutoSpawn] 内置 Gateway 已就绪')
   } else {
-    logger.warn('[AutoSpawn] 内置 Gateway 30s 内未就绪，继续（连接层将自动重试）')
-    console.warn('[AutoSpawn] 内置 Gateway 30s 内未就绪，继续（连接层将自动重试）')
+    logger.warn('[AutoSpawn] 内置 Gateway 90s 内未就绪，继续（连接层将自动重试）')
+    console.warn('[AutoSpawn] 内置 Gateway 90s 内未就绪，继续（连接层将自动重试）')
   }
 }
 
@@ -316,15 +345,17 @@ export async function restartBundledGateway(): Promise<boolean> {
   }
 
   patchSettings({ gateway: { url: `ws://localhost:${GATEWAY_PORT}`, token } })
+  // 升级后重启：先重置自动重启计数，避免旧的 exit 事件干扰
+  autoRestartCount = 0
   forkOpenclawGateway(entryScript, openclawDir, token, true)
 
-  const ready = await waitForGatewayReady(30_000)
+  const ready = await waitForGatewayReady(90_000)
   if (ready) {
     logger.info('[RestartBundled] Gateway 已就绪')
     console.log('[RestartBundled] Gateway 已就绪')
   } else {
-    logger.warn('[RestartBundled] Gateway 30s 内未就绪')
-    console.warn('[RestartBundled] Gateway 30s 内未就绪')
+    logger.warn('[RestartBundled] Gateway 90s 内未就绪')
+    console.warn('[RestartBundled] Gateway 90s 内未就绪')
   }
   return ready
 }
