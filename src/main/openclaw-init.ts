@@ -95,9 +95,10 @@ export async function extractOpenClawIfNeeded(
     return
   }
 
-  const destDir = join(resourcesPath, 'openclaw')
-  // 版本标记存在 userData（%AppData%/EasiestClaw/），与安装目录分离。
-  // 安装新版本时 NSIS 只覆盖安装目录，userData 保持不变，不会误触重新解压。
+  // openclaw 解压到 userData（%AppData%/EasiestClaw/openclaw/），而非安装目录内。
+  // NSIS 升级时只替换安装目录（RMDir /r $INSTDIR），userData 不受影响，
+  // 同版本 OpenClaw 升级 EasiestClaw Shell 后无需重新解压。
+  const destDir = join(app.getPath('userData'), 'openclaw')
   const markerPath = join(app.getPath('userData'), '.openclaw-version')
 
   // 读取本次安装包携带的 openclaw 版本（由 bundle-openclaw.mjs 写入）

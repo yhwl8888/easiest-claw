@@ -26,7 +26,8 @@ export function setPortConflictPending(v: boolean): void { portConflictPending =
 // ── Path utilities ─────────────────────────────────────────────────────────────
 export function getBundledOpenclaw(): { openclawDir: string; entryScript: string } | null {
   const candidates = app.isPackaged
-    ? [join(process.resourcesPath, 'openclaw')]
+    // 打包版：优先查 userData（解压目标），回退 resources（旧版兼容）
+    ? [join(app.getPath('userData'), 'openclaw'), join(process.resourcesPath, 'openclaw')]
     : [join(app.getAppPath(), 'build', 'openclaw')]
 
   for (const openclawDir of candidates) {
