@@ -158,6 +158,7 @@ export function OpenclawView() {
     const [checking, setChecking] = useState(false)
     const [upgrade, setUpgrade] = useState<UpgradeState>({running: false, steps: EMPTY_UPGRADE_STEPS()})
     const [switchingToBundled, setSwitchingToBundled] = useState(false)
+    const [gwLogs, setGwLogs] = useState<Array<{ line: string; isError: boolean }>>([])
 
     const connStatus = state.connectionStatus ?? "disconnected"
     const colors = connColors[connStatus] ?? connColors.disconnected
@@ -261,6 +262,14 @@ export function OpenclawView() {
                     }
                 }
             })
+        })
+        return () => { unsub() }
+    }, [])
+
+    // 订阅 Gateway 进程实时日志
+    useEffect(() => {
+        const unsub = window.ipc.onGatewayLog(({ line, isError }) => {
+            setGwLogs(prev => [...prev.slice(-499), { line, isError }])
         })
         return () => { unsub() }
     }, [])
@@ -641,6 +650,9 @@ export function OpenclawView() {
 
                     {/* Gateway 配置卡片 */}
                     <GatewayConfigCard onSaved={handleRefresh}/>
+
+                    {/* Gateway 进程实时日志 */}
+                    <GatewayLogCard logs={gwLogs} onClear={() => setGwLogs([])}/>
 
                     {/* Agent Fleet */}
                     <div className="space-y-3">
@@ -1202,6 +1214,83 @@ function StartPanel({
                 </div>
             )}
         </div>
+    )
+}
+
+function GatewayLogCard({ logs, onClear }: {
+    logs: Array<{ line: string; isError: boolean }>
+    onClear: () => void
+}) {
+    const [open, setOpen] = useState(false)
+    const ref = React.useRef<HTMLDivElement>(null)
+
+    // 有错误日志时自动展开
+    useEffect(() => {
+        if (logs.some(l => l.isError)) setOpen(true)
+    }, [logs])
+
+    // 自动滚动到底部
+    useEffect(() => {
+        if (open && ref.current) {
+            ref.current.scrollTop = ref.current.scrollHeight
+        }
+    }, [open, logs.length])
+
+    return (
+        <Card className="p-5">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold">Gateway 运行日志</h2>
+                    {logs.length > 0 && (
+                        <span className="text-xs text-muted-foreground">({logs.length} 行)</span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                    {logs.length > 0 && (
+                        <button
+                            onClick={onClear}
+                            className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5"
+                        >
+                            清空
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setOpen(v => !v)}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5"
+                    >
+                        {open ? '收起' : '展开'}
+                    </button>
+                </div>
+            </div>
+            {!open && logs.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                    Gateway 进程启动后此处将显示实时输出，便于排查启动失败原因
+                </p>
+            )}
+            {!open && logs.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1 truncate">
+                    {logs[logs.length - 1].line}
+                </p>
+            )}
+            {open && (
+                <div
+                    ref={ref}
+                    className="mt-3 h-48 overflow-y-auto rounded-md bg-black/80 p-2 text-[10px] font-mono leading-relaxed"
+                >
+                    {logs.slice(-500).map((entry, i) => (
+                        <div
+                            key={i}
+                            className={cn(
+                                "whitespace-pre-wrap break-all",
+                                entry.isError ? "text-red-400" : "text-green-300/90"
+                            )}
+                        >
+                            {entry.line}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </Card>
     )
 }
 
