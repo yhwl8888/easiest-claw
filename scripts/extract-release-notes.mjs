@@ -50,6 +50,14 @@ if (result.length === 0) {
   process.exit(1)
 }
 
-// 去掉首尾空行
-const notes = result.join('\n').trim()
+// 去掉首尾空行，并过滤掉内容全是占位符 "-" 的空小节
+function removeEmptySections(body) {
+  const sectionRegex = /(^|\n)(###[^\n]*\n)([\s\S]*?)(?=\n###|\n##|$)/g
+  return body.replace(sectionRegex, (_, pre, heading, content) => {
+    const hasRealContent = content.split('\n').some(l => l.trim() && l.trim() !== '-')
+    return hasRealContent ? `${pre}${heading}${content}` : ''
+  }).replace(/\n{3,}/g, '\n\n').trim()
+}
+
+const notes = removeEmptySections(result.join('\n').trim())
 process.stdout.write(notes + '\n')

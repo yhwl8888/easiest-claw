@@ -70,11 +70,23 @@ if (unreleasedStart === -1) {
 if (unreleasedEnd === -1) unreleasedEnd = lines.length
 
 // 提取正文（跳过标题行、过滤 blockquote 模板提示行，去掉首尾空行）
-const unreleasedBody = lines
+const rawBody = lines
   .slice(unreleasedStart + 1, unreleasedEnd)
   .filter(l => !l.trimStart().startsWith('>')) // 过滤掉 "> 在这里写..." 等提示性 blockquote
   .join('\n')
   .trim()
+
+// 过滤掉内容全是占位符 "-" 的空小节（### 新增 / 修复 / 变更 等）
+function removeEmptySections(body) {
+  // 按小节（### 标题）拆分，过滤掉正文只有 "-" 的小节
+  const sectionRegex = /(^|\n)(###[^\n]*\n)([\s\S]*?)(?=\n###|\n##|$)/g
+  return body.replace(sectionRegex, (_, pre, heading, content) => {
+    const hasRealContent = content.split('\n').some(l => l.trim() && l.trim() !== '-')
+    return hasRealContent ? `${pre}${heading}${content}` : ''
+  }).replace(/\n{3,}/g, '\n\n').trim()
+}
+
+const unreleasedBody = removeEmptySections(rawBody)
 
 // 检查是否填写了内容（排除只有占位符 "-" 的情况）
 const hasContent = unreleasedBody
