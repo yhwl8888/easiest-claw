@@ -14,15 +14,17 @@
 
 ### 新增
 
--
+- 新增飞书 & Telegram 渠道配置页面，支持可视化配置 appId/appSecret/botToken 等参数
+- 聊天页新增工作区面板（WorkspacePanel），展示智能体文件列表
+- Windows 窗口关闭按钮增加二次确认弹窗，防止误关
 
 ### 修复
 
--
-
-### 变更
-
--
+- 修复智能体详情面板模型显示"未配置"：改用 openclawModelsGet API 获取正确的模型信息
+- 修复智能体详情面板工具列表过长时溢出：改为可折叠展示（默认显示前 5 个）
+- 修复 OpenClaw 首次安装时解压健壮性不足导致 dist/entry.js 缺失
+- 修复 macOS 红绿灯按钮与搜索栏重叠
+- 修复启动页 loading spinner 旋转偏心
 
 ---
 
