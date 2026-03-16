@@ -516,7 +516,7 @@ function ProfileSetupStep({ onDone }: { onDone: () => void }) {
 
 export function GatewayLoadingScreen() {
   return (
-    <div className="h-screen relative flex items-center justify-center bg-background"
+    <div className="h-screen relative flex items-center justify-center bg-background overflow-hidden"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       <div className="absolute top-4 right-4 flex items-center gap-1 z-10"
@@ -575,14 +575,14 @@ export function OnboardingFlow({ onDone }: OnboardingFlowProps) {
 
   if (checkingDataLocation) {
     return (
-      <div className="h-screen relative flex items-center justify-center bg-background">
+      <div className="h-screen relative flex items-center justify-center bg-background overflow-hidden">
         <Loader2 className="h-8 w-8 text-primary animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="h-screen relative flex items-center justify-center bg-background"
+    <div className="h-screen relative flex items-center justify-center bg-background overflow-hidden"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       {/* 窗口控件 — 始终可见 */}

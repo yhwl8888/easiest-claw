@@ -2,9 +2,36 @@ import type { IpcMain } from 'electron'
 import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
+import { execFile } from 'node:child_process'
 import { loadSettings, patchSettings, loadOpenclawDefaults } from '../gateway/settings'
 import { restartRuntime } from '../gateway/runtime'
 import { getDataDir } from '../lib/data-dir'
+import { logger } from '../lib/logger'
+
+const REG_KEY = 'HKCU\\Software\\EasiestClaw'
+
+/**
+ * 同步自定义数据目录到 Windows 注册表（供 NSIS 卸载脚本读取）。
+ * 传 undefined 时删除整个注册表键。
+ */
+export function syncDataDirToRegistry(dir: string | undefined): void {
+  if (process.platform !== 'win32') return
+  try {
+    if (dir) {
+      execFile('reg', ['add', REG_KEY, '/v', 'DataDir', '/t', 'REG_SZ', '/d', dir, '/f'],
+        { windowsHide: true }, (err) => {
+          if (err) logger.warn(`[Registry] failed to write DataDir: ${err.message}`)
+        })
+    } else {
+      execFile('reg', ['delete', REG_KEY, '/f'],
+        { windowsHide: true }, (err) => {
+          if (err) logger.warn(`[Registry] failed to delete key: ${err.message}`)
+        })
+    }
+  } catch {
+    // non-critical, ignore
+  }
+}
 
 export const registerSettingsHandlers = (ipcMain: IpcMain): void => {
   // Load current app settings (gateway URL/token, avatars)
@@ -94,6 +121,7 @@ export const registerSettingsHandlers = (ipcMain: IpcMain): void => {
       patchSettings({ customDataDir: dir })
     }
 
+    syncDataDirToRegistry(dir)
     return { ok: true, needRestart: true }
   })
 
@@ -116,6 +144,7 @@ export const registerSettingsHandlers = (ipcMain: IpcMain): void => {
     } else {
       patchSettings({ customDataDir: undefined })
     }
+    syncDataDirToRegistry(undefined)
     return { ok: true, needRestart: true }
   })
 }
