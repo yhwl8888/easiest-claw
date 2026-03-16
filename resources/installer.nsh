@@ -1,4 +1,4 @@
-﻿; installer.nsh — 天工AI 自定义 NSIS 安装钩子
+; installer.nsh — 天工AI 自定义 NSIS 安装钩子
 ; 在安装/卸载时自动添加/删除 Windows Defender 防火墙规则，
 ; 避免用户首次启动时收到"是否允许连接网络"的拦截弹窗。
 ; ⚠️  此文件由 scripts/apply-branding.mjs 从 installer.nsh.template 自动生成，请勿直接编辑。
@@ -7,6 +7,7 @@
 ; 通过 MUI_PAGE_CUSTOMFUNCTION_SHOW 在安装页面显示时写入提示文字，
 ; 因为 electron-builder 的 installSection.nsh 会在 section 开头设 SetDetailsPrint none，
 ; 但 SHOW 回调在 section 执行前触发，此时写入的文字会保留在日志面板中。
+
 !macro customHeader
   ShowInstDetails nevershow
   ShowUnInstDetails show

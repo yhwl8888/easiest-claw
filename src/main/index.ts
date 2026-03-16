@@ -4,6 +4,7 @@ import { spawn } from 'child_process'
 import { existsSync, writeFileSync, readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerAllIpcHandlers } from './ipc'
+import { syncDataDirToRegistry } from './ipc/settings'
 import { startRuntime, stopRuntime } from './gateway/runtime'
 import { autoSpawnBundledOpenclaw, addGatewayLogListener, getGatewayLogBuffer } from './gateway/bundled-process'
 import { extractOpenClawIfNeeded, getExtractState, confirmUpgrade, skipUpgrade } from './openclaw-init'
@@ -167,6 +168,7 @@ app.whenReady().then(async () => {
     })
     if (result.canceled || !result.filePaths[0]) return { ok: false }
     patchSettings({ customDataDir: result.filePaths[0], dataLocationSelected: true } as Record<string, unknown>)
+    syncDataDirToRegistry(result.filePaths[0])
     return { ok: true, dir: result.filePaths[0] }
   })
 
