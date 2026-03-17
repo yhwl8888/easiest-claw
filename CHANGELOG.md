@@ -26,6 +26,22 @@
 
 ---
 
+## [0.0.27-beta] - 2026-03-17
+
+### 修复
+
+- 首次启动设置完用户信息后，模型配置步骤白屏（onDone 引用不稳定 + configured 时 return null）
+- 添加 AppErrorBoundary 防止未捕获 React 错误导致白屏
+- Dialog/Select 弹出层在 onboarding 拖拽区域内点击无响应（Portal 内容缺少 no-drag）
+
+### 变更
+
+-
+
+---
+
+---
+
 ## [0.0.26-beta] - 2026-03-17
 
 ### 新增
