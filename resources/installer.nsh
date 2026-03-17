@@ -37,9 +37,11 @@
 !macro customRemoveFiles
   SetDetailsPrint both
   DetailPrint "正在删除程序文件，请稍候..."
-  SetDetailsPrint none
-  RMDir /r $INSTDIR
-  SetDetailsPrint both
+  ; 用 rd /s /q 替代 NSIS 逐文件删除，处理 node_modules 海量文件快几个量级
+  nsExec::ExecToStack 'cmd /c rd /s /q "$INSTDIR"'
+  Pop $0
+  ; rd 只能删内容不删自身（如果当前目录在其中），兜底清理
+  RMDir $INSTDIR
   DetailPrint "程序文件删除完成。"
 !macroend
 
@@ -60,14 +62,16 @@
 选择「否」则保留，重新安装后可自动恢复。" \
     IDNO done
 
-  ; 删除默认 userData 目录
-  RMDir /r "$APPDATA\easiest-claw-desktop"
+  ; 删除默认 userData 目录（rd /s /q 比 RMDir /r 快很多）
+  nsExec::ExecToStack 'cmd /c rd /s /q "$APPDATA\easiest-claw-desktop"'
+  Pop $0
   DetailPrint "默认用户数据已清除。"
 
   ; 删除自定义数据目录（从注册表读取）
   ReadRegStr $0 HKCU "Software\EasiestClaw" "DataDir"
   ${If} $0 != ""
-    RMDir /r "$0"
+    nsExec::ExecToStack 'cmd /c rd /s /q "$0"'
+    Pop $1
     DetailPrint "自定义数据目录已清除: $0"
   ${EndIf}
 
