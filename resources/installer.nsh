@@ -1,4 +1,4 @@
-﻿; installer.nsh — EasiestClaw 自定义 NSIS 安装钩子
+; installer.nsh — EasiestClaw 自定义 NSIS 安装钩子
 ; 在安装/卸载时自动添加/删除 Windows Defender 防火墙规则，
 ; 避免用户首次启动时收到"是否允许连接网络"的拦截弹窗。
 ; ⚠️  此文件由 scripts/apply-branding.mjs 从 installer.nsh.template 自动生成，请勿直接编辑。

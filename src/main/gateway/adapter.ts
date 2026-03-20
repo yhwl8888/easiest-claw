@@ -67,6 +67,7 @@ const METHOD_ALLOWLIST = new Set<string>([
   'skills.update',
   'skills.install',
   'tools.catalog',
+  'channels.status',
 ])
 
 type PendingRequest = {

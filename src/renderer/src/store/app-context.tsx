@@ -46,7 +46,7 @@ function buildWorkspacePrompt(workspacePath: string, content: string): string {
   ].join("\n")
 }
 
-/** Prefetch IndexedDB attachment cache before dispatching LOAD_HISTORY. */
+/** 在 dispatch LOAD_HISTORY 前预取 IndexedDB 附件缓存。 */
 async function prefetchAttachmentOverrides(
   convId: string,
   messages: import("@/hooks/use-openclaw").HistoryMessage[]
@@ -81,9 +81,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const compactionDoneTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const [compactingConversationIds, setCompactingConversationIds] = useState<Set<string>>(new Set())
   const [compactedConversationIds, setCompactedConversationIds] = useState<Set<string>>(new Set())
-  // Dedup gateway events:
-  // 1) frame-level dedupe by connectionEpoch+seq (prevents duplicate listener consumption)
-  // 2) terminal-event dedupe by payload semantics (protects replayed finals/ends)
+  // 网关事件去重：
+  // 1) 基于 connectionEpoch + seq 的帧级去重（避免重复消费同一帧）
+  // 2) 基于 payload 语义的终态事件去重（避免 final/end/error 被重放）
   const eventDedupeRef = useRef(new Map<string, number>())
   const DEDUP_TTL_MS = 30_000
   const MAX_DEDUP_KEYS = 4000
@@ -107,7 +107,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Frame-level dedupe: same gateway frame should be processed once.
+      // 帧级去重：同一网关帧只处理一次。
       if (typeof event.seq === "number") {
         const rec = event as unknown as Record<string, unknown>
         const epoch = typeof rec.connectionEpoch === "string" ? rec.connectionEpoch : "no-epoch"
@@ -117,20 +117,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         map.set(frameKey, now)
       }
 
-      // Semantic dedupe for terminal events (same logical completion may be replayed).
+      // 终态事件语义去重：同一逻辑完成事件可能被重放。
       const pl = event.payload as Record<string, unknown> | undefined
       if (pl) {
         const runId = pl.runId != null ? String(pl.runId) : ""
         const sessionKey = pl.sessionKey != null ? String(pl.sessionKey) : ""
         const evtName = event.event ?? ""
-        // For chat events, use state (delta/final/error/aborted)
+        // chat 事件使用 state（delta/final/error/aborted）
         const state = pl.state != null ? String(pl.state) : ""
-        // For agent events, use stream + phase
+        // agent 事件使用 stream + phase
         const data = pl.data as Record<string, unknown> | undefined
         const stream = pl.stream != null ? String(pl.stream) : ""
         const phase = data?.phase != null ? String(data.phase) : ""
-        // delta events are cumulative; each one replaces the previous, so dedup would break streaming.
-        // Only dedup terminal events (final, end, error, aborted, completed).
+        // delta 是增量流，不能去重；只对终态事件去重。
         const isTerminal = state === "final" || state === "error" || state === "aborted"
           || phase === "end" || phase === "error" || phase === "completed"
         if (isTerminal && runId) {
@@ -141,7 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Track compaction lifecycle per conversation for header inline status
+    // 按会话跟踪压缩生命周期，用于头部内联状态展示
     if (event.type === "gateway.event" && event.event === "agent") {
       const payload = event.payload as Record<string, unknown> | undefined
       if (payload && payload.stream === "compaction") {
@@ -237,7 +236,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "GATEWAY_EVENT", payload: event })
   }, [])
 
-  // Define refreshFleet before useRuntimeEventStream so the status effect can reference it.
+  // 在 useRuntimeEventStream 之前定义 refreshFleet，便于 status effect 引用。
   const refreshFleet = useCallback(async () => {
     const result = await loadFleet()
     if (result?.seeds && result.seeds.length > 0) {
@@ -273,7 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const hasPrimary = !!result.defaults?.primary
       dispatch({ type: "SET_MODELS_CONFIGURED", payload: !!(hasProviders && hasPrimary) })
     } catch {
-      // IPC not ready yet, keep default (true) to avoid flash
+      // IPC 尚未就绪时保持默认值（true），避免界面闪烁
     }
   }, [])
 
@@ -285,12 +284,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     dispatch({ type: "SET_CONNECTION_STATUS", payload: status })
 
-    // Refresh agent list/history each time the gateway reconnects.
+    // 每次网关重连后刷新 agent 列表与历史记录
     if (status === "connected" && prevStatusRef.current !== "connected") {
       refreshFleet()
       checkModelsConfigured()
 
-      // Agent list can still be empty before gateway is fully ready; retry for up to 20s.
+      // 网关尚未完全就绪时，agent 列表可能为空，最多重试 20 秒
       if (fleetRetryRef.current) clearInterval(fleetRetryRef.current)
       let elapsed = 0
       fleetRetryRef.current = setInterval(() => {
@@ -304,7 +303,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }, 1000)
     }
 
-    // Stop retry loop when disconnected.
+    // 断开连接后停止重试循环
     if (status !== "connected" && fleetRetryRef.current) {
       clearInterval(fleetRetryRef.current)
       fleetRetryRef.current = null
@@ -378,14 +377,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Show orchestration decision
       const names = mentionedIds
         .map((id) => state.agents.find((a) => a.id === id)?.name ?? id)
-        .join("\u3001")
+        .join("、")
       dispatch({
         type: "ADD_ORCHESTRATION_MESSAGE",
         payload: {
           conversationId: conv.id,
           strategy: "coordinator",
           selectedAgents: mentionedIds,
-          reason: `\u534f\u8c03\u4eba\u5df2\u5206\u6d3e \u2192 ${names}`,
+          reason: `协调人已分派 → ${names}`,
         },
       })
 
@@ -502,9 +501,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             id: uniqueId("msg-err"),
             conversationId,
             senderId: "system",
-            senderName: "\u7cfb\u7edf",
+            senderName: "系统",
             senderAvatar: "SY",
-            content: `\u53d1\u9001\u5931\u8d25: ${error}`,
+            content: `发送失败: ${error}`,
             timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
             read: true,
             type: "system",
@@ -517,7 +516,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         send(agentMemberIds[0], content, undefined, attachments).then((result) => {
           if (!result.ok) {
             const agent = stateRef.current.agents.find((a) => a.id === agentMemberIds[0])
-            sendError(`${agent?.name ?? agentMemberIds[0]}: ${(result as { error?: string }).error ?? "\u672a\u77e5\u9519\u8bef"}`)
+            sendError(`${agent?.name ?? agentMemberIds[0]}: ${(result as { error?: string }).error ?? "未知错误"}`)
           }
         })
         return
@@ -561,7 +560,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           send(agentId, messageContent, sessionKey, attachments).then((result) => {
             if (!result.ok) {
               const agent = stateRef.current.agents.find((a) => a.id === agentId)
-              sendError(`${agent?.name ?? agentId}: ${(result as { error?: string }).error ?? "\u672a\u77e5\u9519\u8bef"}`)
+              sendError(`${agent?.name ?? agentId}: ${(result as { error?: string }).error ?? "未知错误"}`)
             }
           })
         }, delay)

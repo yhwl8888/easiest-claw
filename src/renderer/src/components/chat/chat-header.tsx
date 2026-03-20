@@ -74,13 +74,14 @@ export function ChatHeader({ conversation, onToggleMembers, onToggleWorkspace, o
 
   const isCompactingContext = compactingConversationIds.has(conversation.id)
   const isContextCompacted = !isCompactingContext && compactedConversationIds.has(conversation.id)
+  const showContextBadge = isCompactingContext || isContextCompacted
   const handleUnavailableAction = (actionLabel: string) => {
     toast.info(t("header.unavailableAction", { action: actionLabel }))
   }
 
   return (
     <div
-      className="h-12 flex items-center justify-between px-4 border-b bg-background"
+      className="h-12 flex items-center justify-start gap-2 px-4 border-b bg-background"
       style={{
         WebkitAppRegion: "drag",
         ...(window.ipc.platform !== "darwin" && { paddingRight: "154px" }),
@@ -135,44 +136,47 @@ export function ChatHeader({ conversation, onToggleMembers, onToggleWorkspace, o
               </>
             )}
           </div>
-          <div className="flex items-center gap-2 min-w-0 text-xs text-muted-foreground">
-            <span className="truncate">
-              {isGroup ? (
-                conversation.purpose ?? t("common.memberCount", { count: conversation.members.length })
-              ) : agent ? (
-                <span className="flex items-center gap-1">
-                  {agent.role && <span>{agent.role}</span>}
-                  {agent.role && <span className="text-muted-foreground/40">{"\u00b7"}</span>}
-                  <span>{statusLabel}</span>
-                </span>
-              ) : null}
-            </span>
-            {(isCompactingContext || isContextCompacted) && (
-              <Badge
-                variant="secondary"
-                className={cn(
-                  "h-5 px-1.5 text-[10px] font-medium shrink-0 border",
-                  isCompactingContext
-                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                )}
-              >
-                {isCompactingContext ? (
-                  <span className="flex items-center gap-1">
-                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                    <span>{"\u6b63\u5728\u538b\u7f29\u4e0a\u4e0b\u6587"}</span>
-                  </span>
-                ) : (
-                  <span>{"\u4e0a\u4e0b\u6587\u5df2\u538b\u7f29"}</span>
-                )}
-              </Badge>
-            )}
+          <div className="text-xs text-muted-foreground truncate">
+            {isGroup ? (
+              conversation.purpose ?? t("common.memberCount", { count: conversation.members.length })
+            ) : agent ? (
+              <span className="flex items-center gap-1">
+                {agent.role && <span>{agent.role}</span>}
+                {agent.role && <span className="text-muted-foreground/40">·</span>}
+                <span>{statusLabel}</span>
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
 
+      <div className="flex-1 min-w-0 h-6 flex items-center">
+        <div className="w-[140px]">
+          {showContextBadge && (
+            <Badge
+              variant="secondary"
+              className={cn(
+                "h-5 px-1.5 text-[10px] font-medium shrink-0 border",
+                isCompactingContext
+                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+              )}
+            >
+              {isCompactingContext ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  <span>{t("header.contextCompacting")}</span>
+                </span>
+              ) : (
+                <span>{t("header.contextCompacted")}</span>
+              )}
+            </Badge>
+          )}
+        </div>
+      </div>
+
       <div
-        className="flex items-center gap-0.5 shrink-0"
+        className="flex items-center gap-0.5 shrink-0 ml-auto"
         style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >
         {isGroup && onToggleMembers && (
